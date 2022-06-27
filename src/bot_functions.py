@@ -1,5 +1,5 @@
 from src import image_gen, replay_reader, summoner_data
-from discord import File
+from discord import File, Embed, Colour
 import os
 import pandas as pd
 
@@ -28,8 +28,6 @@ class BotFunctions:
                          "unlink": {"func": self.unlink, "help": "rg:unlink {Summoner Name} - Opposite of rg:link"},
                          "stats": {"func": self.stats,
                                     "help": "rg:stats {Summoner Name or @} {ha or sr, leave blank for all} - Get player's stats"},
-                         "history": {"func": self.history,
-                                     "help": "rg:history {Summoner Name or @} {ha or sr, leave blank for all} - Get recent matches"},
                          "help": {"func": self.help,
                                   "help": "rg:help {command} - Get syntax for given command, leave blank for list of commands"}}
 
@@ -42,7 +40,7 @@ class BotFunctions:
                     logged_ids = f.readlines()
                     if replay_id + '\n' in logged_ids:
                         if message:
-                            await message.channel.send(
+                            await message.reply(
                                 content=f"Match {replay_id} was previously logged")  # The match has already been logged.
                         return
             elif not os.path.exists("data/logged.txt"):
@@ -52,43 +50,44 @@ class BotFunctions:
             with open("data/logged.txt", "a") as f:
                 f.write(f"{replay_id}\n")
             if message:
-                await message.channel.send(content=f"Match {replay_id} logged")
+                await message.reply(content=f"Match {replay_id} logged")
 
     async def id(self, message=None, ids=None):  # Get match from ID
         if ids is None:
-            ids = message.content[6:].split(',')
+            ids = message.content[4:].split(',')
         for replay_id in ids:
             try:
                 replay = replay_reader.ReplayReader(replay_id)
             except FileNotFoundError:
-                await message.channel.send(content="Replay file not found")
+                await message.reply(content="Replay file not found")
                 return
             if not os.path.exists(f'data/match_imgs/{replay_id}.png'):
                 replay.generate_game_img()
-            await message.channel.send(file=File(f'data/match_imgs/{replay_id}.png'))
+            embed = Embed(title="Replay", description=f"{replay_id}", color=Colour.blurple())
+            file = File(f'data/match_imgs/{replay_id}.png', filename="image.png")
+            embed.set_image(url="attachment://image.png")
 
             alartlist, arrestlist = self.summoner_data.ward_alert(replay_id)
             if len(alartlist) > 0:
-                await message.channel.send(content=f"Buy more control wards! (Bought control ward : 1)   {' '.join(alartlist)}")
+                embed.add_field(name="\n Buy more control wards! (Bought control ward : 1)", value=f"{' '.join(alartlist)}", inline=False)
             if len(arrestlist) > 0:
-                await message.channel.send(content=f"**I'm arresting you! (Bought control ward : 0)   {' '.join(arrestlist)}**")
+                embed.add_field(name="\n **I'm arresting you! (Bought control ward : 0)", value=f"{' '.join(arrestlist)}", inline=False)
 
-            if os.path.exists("data/logged.txt"):
-                with open("data/logged.txt", "r") as f:
-                    logged_ids = f.readlines()
-                    if replay_id + '\n' in logged_ids:
-                        if message:
-                            await message.channel.send(
-                                content=f"Match {replay_id} was previously logged")  # The match has already been logged.
-                        return
-            elif not os.path.exists("data/logged.txt"):
+            if not os.path.exists("data/logged.txt"):
                 with open("data/logged.txt", "w") as f:
                     pass
+
             self.summoner_data.log(replay_id)
-            with open("data/logged.txt", "a") as f:
-                f.write(f"{replay_id}\n")
+
+            with open("data/logged.txt", "r") as f:
+                logged_ids = f.readlines()
+
+            if not replay_id + '\n' in logged_ids:
+                with open("data/logged.txt", "a") as f:
+                    f.write(f"{replay_id}\n")
+
             if message:
-                await message.channel.send(content=f"Match {replay_id} logged")
+                await message.reply(file=file, embed=embed)
 
     async def replay(self, message):  # Submit new replay
         attachments = message.attachments
@@ -97,55 +96,27 @@ class BotFunctions:
             for attachment in attachments:
                 if attachment.filename.endswith('.rofl') or attachment.filename.endswith('.json'):
                     await attachment.save(f"data/replays/{attachment.filename}")
-                    await message.channel.send(content=f"Replay {attachment.filename[:-5]} saved")
                     ids.append(attachment.filename[:-5])
                 else:
-                    await message.channel.send(content=f"File {attachment.filename} is not a supported file type")
+                    await message.reply(content=f"File {attachment.filename} is not a supported file type")
         if len(ids) > 0:
             await self.id(message, ids)
         else:
-            await message.channel.send(content="No replay file attached")
+            await message.reply(content="No replay file attached")
 
     async def link(self, message):
         summoner_name, discord_id = msg2sum(message.content, message.author.id)
         if discord_id is None:
             discord_id = message.author.id
         else:
-            await message.channel.send(content=self.summoner_data.link_id2sum(summoner_name, str(discord_id)))
+            await message.reply(content=self.summoner_data.link_id2sum(summoner_name, str(discord_id)))
 
     async def unlink(self, message):
         summoner_name, discord_id = msg2sum(message.content, message.author.id)
         if discord_id is None:
             discord_id = message.author.id
         else:
-            await message.channel.send(content=self.summoner_data.unlink(summoner_name, str(discord_id)))
-
-    async def profile(self, message):
-        matches = self.get_history(message)
-        champ_data_list = self.summoner_data.profile(matches)
-        self.image_gen.generate_player_profile(champ_data_list)
-        await message.channel.send(file=File('temp.png'))
-
-    async def history(self, message):
-        matches = self.get_history(message)
-        match_history = []
-        if len(matches) == 1 and "|" not in matches[0]:
-            await message.channel.send(content=matches[0])
-            return
-        for match in matches:
-            champ, result, kda, game_id, csm = match.split("|")
-            replay = replay_reader.ReplayReader(game_id)
-            stats = replay.get_player_stats(champ=champ)
-            match_history.append(
-                [champ, result, stats['keystone'], stats['subperk'], kda, stats['cs'], stats['items'], stats['gold']])
-        self.image_gen.generate_player_history(match_history)
-        await message.channel.send(file=File('temp.png'))
-        os.remove('temp.png')
-
-    def get_history(self, message):
-        game_map = "all"
-        summoner_name, discord_id = msg2sum(message.content, message.author.id)
-        return self.summoner_data.history(summoner_name=summoner_name, discord_id=discord_id, mode=game_map)
+            await message.reply(content=self.summoner_data.unlink(summoner_name, str(discord_id)))
 
     async def help(self, message):
         space_split = message.content.split(" ")
@@ -155,14 +126,14 @@ class BotFunctions:
                 cmd_list += cmd + ", "
             cmd_list = cmd_list[:-2] + "\n"
             cmd_list += f"Use {self.prefix}help {{command}} to get more help."
-            await message.channel.send(content=cmd_list)
+            await message.reply(content=cmd_list)
         elif len(space_split) == 2:
             for cmd in self.commands:
                 if cmd.lower() == space_split[1].lower():
                     help_str = self.commands[cmd]["help"]
-            await message.channel.send(content=help_str)
+            await message.reply(content=help_str)
         else:
-            await message.channel.send(content="Invalid syntax. Try rg:help {command}")
+            await message.reply(content="Invalid syntax. Try rg:help {command}")
 
     async def handle_message(self, message):
         cmd_split = message.content.split(self.prefix)
@@ -170,7 +141,7 @@ class BotFunctions:
         if space_split[0] in self.commands:
             await self.commands[space_split[0]]["func"](message)
         else:
-            await message.channel.send(content="Command not found")
+            await message.reply(content="Command not found")
     
     async def stats(self, message):
         summoner_name, discord_id = msg2sum(message.content, message.author.id)
@@ -184,7 +155,7 @@ class BotFunctions:
                 summoner_name = list_of_key[position]
 
             if summoner_name is None:
-                await message.channel.send(content="Summoner name is not linked")
+                await message.reply(content="Summoner name is not linked")
                 return
 
             name = f"<@{discord_id}>"
@@ -196,7 +167,7 @@ class BotFunctions:
             summoner_df = df[df["name"] == summoner_name]
 
             if len(summoner_df) < 1:
-                await message.channel.send(content="Log not found")
+                await message.reply(content="Log not found")
                 return
 
             average_kill = str(sum(summoner_df["kill"].astype(int)) / len(summoner_df))
@@ -207,7 +178,7 @@ class BotFunctions:
             average_vision_ward = sum(summoner_df["vision_ward"].astype(int)) / len(summoner_df)
 
             if len(summoner_df) > 4:
-                role = summoner_df['position'].value_counts()[:5]
+                role = summoner_df['position'].value_counts()
                 champ = summoner_df["champion"].value_counts()[:5]
             else:
                 role = summoner_df['position'].value_counts()[:len(summoner_df)]
@@ -216,14 +187,30 @@ class BotFunctions:
             role_str = ''
 
             for index, v in role.items():
-                role_str += f'{index} : {v}  '
+                role_str += f'**{index}** : {v}   '
 
             champ_str = ''
             for index, v in champ.items():
-                champ_str += f'{index} : {v}  '
+                champ_str += f'**{index}** : {v}   \ '
 
-            await message.channel.send(
-                content=f" {name} \n Winrate : {winrate:.3g}  KDA : {average_kda:.3g}  Wards : {average_vision_ward:.3g} \n Role :  {role_str} \n Champions :  {champ_str}")
+            if winrate > 60:
+                stats_color = 0x0099E1
+            elif winrate > 50:
+                stats_color = 0x00D166
+            elif winrate > 40:
+                stats_color = 0xF8C300
+            else:
+                stats_color = 0xFD0061
+            
+            embed = Embed(title=f"{name} Stats", description=f"Total Games {len(summoner_df)} \n", color=stats_color)
+            embed.add_field(name="Winrate", value=f"{winrate:.3g}")
+            embed.add_field(name="KDA", value=f"{average_kda:.3g}")
+            embed.add_field(name="Wards", value=f"{average_vision_ward:.3g}")
+
+            embed.add_field(name="\n Role", value=f"{role_str}", inline=False)
+            embed.add_field(name="\n Favorite Champions", value=f"{champ_str}", inline=False)
+            
+            await message.reply(embed=embed)
         else:
-            await message.channel.send(content="Log file not found")
+            await message.reply(content="Log file not found")
             return

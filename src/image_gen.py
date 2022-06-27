@@ -85,7 +85,7 @@ class ImageGen:
         # [[winner kda, loser kda], Winners, Losers, map, timestamp]
         # in each team will be a list of players, containing [KEYSTONE_ID, PERK_SUB_STYLE, champ, name, KDA, minions_killed, [items], gold_earned]
         additional_pixels = (len(player_list[1]) + len(player_list[2])) * 43  # add another 45 pts for each player
-        self.current_image = Image.new('RGBA', (780, 150 + additional_pixels))
+        self.current_image = Image.new('RGBA', (800, 150 + additional_pixels))
         self.draw = ImageDraw.Draw(self.current_image)
         self.current_pixel = (0, 0)
         self.text(text=f"{player_list[3]} ({player_list[4]})")
