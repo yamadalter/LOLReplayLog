@@ -71,13 +71,13 @@ class BotFunctions:
             if len(alartlist) > 0:
                 embed.add_field(name="\n Buy more control wards! (Bought control ward : 1)", value=f"{' '.join(alartlist)}", inline=False)
             if len(arrestlist) > 0:
-                embed.add_field(name="\n **I'm arresting you! (Bought control ward : 0)", value=f"{' '.join(arrestlist)}", inline=False)
+                embed.add_field(name="\n **I'm arresting you! (Bought control ward : 0)**", value=f"{' '.join(arrestlist)}", inline=False)
 
             if not os.path.exists("data/logged.txt"):
                 with open("data/logged.txt", "w") as f:
                     pass
 
-            self.summoner_data.log(replay_id)
+            
 
             with open("data/logged.txt", "r") as f:
                 logged_ids = f.readlines()
@@ -85,6 +85,7 @@ class BotFunctions:
             if not replay_id + '\n' in logged_ids:
                 with open("data/logged.txt", "a") as f:
                     f.write(f"{replay_id}\n")
+                    self.summoner_data.log(replay_id)
 
             if message:
                 await message.reply(file=file, embed=embed)
@@ -191,7 +192,7 @@ class BotFunctions:
 
             champ_str = ''
             for index, v in champ.items():
-                champ_str += f'**{index}** : {v}   \ '
+                champ_str += f'**{index}** : {v}  '
 
             if winrate > 60:
                 stats_color = 0x0099E1
@@ -202,7 +203,7 @@ class BotFunctions:
             else:
                 stats_color = 0xFD0061
             
-            embed = Embed(title=f"{name} Stats", description=f"Total Games {len(summoner_df)} \n", color=stats_color)
+            embed = Embed(title=f"Stats", description=f"{name} Total Games {len(summoner_df)} \n", color=stats_color)
             embed.add_field(name="Winrate", value=f"{winrate:.3g}")
             embed.add_field(name="KDA", value=f"{average_kda:.3g}")
             embed.add_field(name="Wards", value=f"{average_vision_ward:.3g}")
