@@ -2,7 +2,9 @@ from src import image_gen, replay_reader, summoner_data
 from discord import File, Embed, Colour
 import os
 import pandas as pd
+import numpy as np
 
+LANE =["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"]
 
 def msg2sum(content, d_id):
     space_split = content.split(" ")
@@ -28,6 +30,10 @@ class BotFunctions:
                          "unlink": {"func": self.unlink, "help": "rg:unlink {Summoner Name} - Opposite of rg:link"},
                          "stats": {"func": self.stats,
                                     "help": "rg:stats {Summoner Name or @} {ha or sr, leave blank for all} - Get player's stats"},
+                         "detail": {"func": self.detail,
+                                    "help": "rg:detail {Summoner Name or @} {ha or sr, leave blank for all} - Get player's detail stats"},
+                         "bestgame": {"func": self.bestgame,
+                                    "help": "rg:bestgame {Summoner Name or @}  - Get player's bestgame"},
                          "help": {"func": self.help,
                                   "help": "rg:help {command} - Get syntax for given command, leave blank for list of commands"}}
 
@@ -69,15 +75,13 @@ class BotFunctions:
 
             alartlist, arrestlist = self.summoner_data.ward_alert(replay_id)
             if len(alartlist) > 0:
-                embed.add_field(name="\n Buy more control wards! (Bought control ward : 1)", value=f"{' '.join(alartlist)}", inline=False)
+                embed.add_field(name="\nBuy more control wards! (Bought control ward : 1)", value=f"{' '.join(alartlist)}", inline=False)
             if len(arrestlist) > 0:
-                embed.add_field(name="\n **I'm arresting you! (Bought control ward : 0)**", value=f"{' '.join(arrestlist)}", inline=False)
+                embed.add_field(name="\n**I'm arresting you! (Bought control ward : 0)**", value=f"{' '.join(arrestlist)}", inline=False)
 
             if not os.path.exists("data/logged.txt"):
                 with open("data/logged.txt", "w") as f:
                     pass
-
-            
 
             with open("data/logged.txt", "r") as f:
                 logged_ids = f.readlines()
@@ -173,6 +177,8 @@ class BotFunctions:
 
             average_kill = str(sum(summoner_df["kill"].astype(int)) / len(summoner_df))
             average_death = str(sum(summoner_df["death"].astype(int)) / len(summoner_df))
+            if average_death == 0.0:
+                average_death = 1.0
             average_assist = str(sum(summoner_df["assist"].astype(int)) / len(summoner_df))
             average_kda = (float(average_kill) + float(average_assist)) / float(average_death)
             winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
@@ -203,14 +209,127 @@ class BotFunctions:
             else:
                 stats_color = 0xFD0061
             
-            embed = Embed(title=f"Stats", description=f"{name} Total Games {len(summoner_df)} \n", color=stats_color)
+            embed = Embed(title="Stats", description=f"**{name}**\nTotal Games {len(summoner_df)}\n", color=stats_color)
             embed.add_field(name="Winrate", value=f"{winrate:.3g}")
             embed.add_field(name="KDA", value=f"{average_kda:.3g}")
             embed.add_field(name="Wards", value=f"{average_vision_ward:.3g}")
 
-            embed.add_field(name="\n Role", value=f"{role_str}", inline=False)
-            embed.add_field(name="\n Favorite Champions", value=f"{champ_str}", inline=False)
+            embed.add_field(name="\nRole", value=f"{role_str}", inline=False)
+            embed.add_field(name="\nFavorite Champions", value=f"{champ_str}", inline=False)
             
+            await message.reply(embed=embed)
+        else:
+            await message.reply(content="Log file not found")
+            return
+
+    async def bestgame(self, message):
+        summoner_name, discord_id = msg2sum(message.content, message.author.id)
+        if discord_id is not None:
+            list_of_key = list(self.summoner_data.id2sum.keys())
+            multi_list = list(self.summoner_data.id2sum.values())
+            list_of_value = [x[0] for x in multi_list]
+
+            if discord_id in list_of_value:
+                position = list_of_value.index(discord_id)
+                summoner_name = list_of_key[position]
+
+            if summoner_name is None:
+                await message.reply(content="Summoner name is not linked")
+                return
+
+            name = f"<@{discord_id}>"
+        else:
+            name = summoner_name
+
+        if os.path.exists('data/log/log.csv'):
+            df = pd.read_csv('data/log/log.csv')
+            summoner_df = df[df["name"] == summoner_name]
+
+            if len(summoner_df) < 1:
+                await message.reply(content="Log not found")
+                return
+        
+            kill = summoner_df["kill"].astype(int) / len(summoner_df)
+            death = summoner_df["death"].astype(int) / len(summoner_df)
+            assist = summoner_df["assist"].astype(int) / len(summoner_df)
+            kda = ((kill) + (assist)) / (death)
+            max_index = np.argmax(kda)
+            replay_id = list(summoner_df["game_id"])[max_index]
+            if not os.path.exists(f'data/match_imgs/{replay_id}.png'):
+                return
+            embed = Embed(title="Best Game", description=f"{name}", color=Colour.blurple())
+            file = File(f'data/match_imgs/{replay_id}.png', filename="image.png")
+            embed.set_image(url="attachment://image.png")
+            if message:
+                await message.reply(file=file, embed=embed)
+
+    async def detail(self, message):
+
+        summoner_name, discord_id = msg2sum(message.content, message.author.id)
+        if discord_id is not None:
+            list_of_key = list(self.summoner_data.id2sum.keys())
+            multi_list = list(self.summoner_data.id2sum.values())
+            list_of_value = [x[0] for x in multi_list]
+
+            if discord_id in list_of_value:
+                position = list_of_value.index(discord_id)
+                summoner_name = list_of_key[position]
+
+            if summoner_name is None:
+                await message.reply(content="Summoner name is not linked")
+                return
+
+            name = f"<@{discord_id}>"
+        else:
+            name = summoner_name
+
+        if os.path.exists('data/log/log.csv'):
+            df = pd.read_csv('data/log/log.csv')
+            summoner_df = df[df["name"] == summoner_name]
+
+            if len(summoner_df) < 1:
+                await message.reply(content="Log not found")
+                return
+
+            embed = Embed(title="Detail stats", description=f"**{name}**\nTotal Games {len(summoner_df)}\n", color=0xFFFFFF)
+            for lane in LANE:
+                lane_df = summoner_df[summoner_df["position"] == lane]
+                if len(lane_df) > 0:
+                    average_kill = str(sum(lane_df["kill"].astype(int)) / len(lane_df))
+                    average_death = str(sum(lane_df["death"].astype(int)) / len(lane_df))
+                    average_assist = str(sum(lane_df["assist"].astype(int)) / len(lane_df))
+                    average_kda = (float(average_kill) + float(average_assist)) / float(average_death)
+                    winrate = sum(lane_df["result"] == 'Win') / len(lane_df) * 100
+                    average_vision_ward = sum(lane_df["vision_ward"].astype(int)) / len(lane_df)
+
+                    if len(lane_df) > 4:
+                        champ = lane_df["champion"].value_counts()[:5]
+                    else:
+                        champ = lane_df["champion"].value_counts()[:len(lane_df)]
+
+                    champ_str = ''
+                    for index, v in champ.items():
+                        champ_str += f'**{index}** : {v}  '
+
+                    embed.add_field(name=f"{lane}", value=f"**Games** : **{len(lane_df)}**", inline=False)
+                    embed.add_field(name="Winrate", value=f"{winrate:.3g}")
+                    embed.add_field(name="KDA", value=f"{average_kda:.3g}")
+                    embed.add_field(name="Wards", value=f"{average_vision_ward:.3g}")
+                    embed.add_field(name="\nFavorite Champions", value=f"{champ_str}\n\u200b", inline=False)
+
+            average_kill = str(sum(summoner_df["kill"].astype(int)) / len(summoner_df))
+            average_death = str(sum(summoner_df["death"].astype(int)) / len(summoner_df))
+            average_assist = str(sum(summoner_df["assist"].astype(int)) / len(summoner_df))
+            if average_death == 0.0:
+                average_death = 1.0
+            average_kda = (float(average_kill) + float(average_assist)) / float(average_death)
+            winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
+            average_vision_ward = sum(summoner_df["vision_ward"].astype(int)) / len(summoner_df)
+
+            embed.add_field(name="Total Winrate", value=f"{winrate:.3g}")
+            embed.add_field(name="KDA", value=f"{average_kda:.3g}")
+            embed.add_field(name="Wards", value=f"{average_vision_ward:.3g}")
+
             await message.reply(embed=embed)
         else:
             await message.reply(content="Log file not found")

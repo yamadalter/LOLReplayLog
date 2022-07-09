@@ -13,8 +13,8 @@ class ImageGen:
         self.current_image = None
         self.draw = None
         self.current_pixel = (0, 0)
-        self.large_font = ImageFont.truetype("C:\Windows\Fonts\YuGothM.ttc", 24)
-        self.normal_font = ImageFont.truetype("C:\Windows\Fonts\YuGothM.ttc", 16)
+        self.large_font = ImageFont.truetype("/usr/share/fonts/google-noto/NotoSansJP-Thin.otf", 24)
+        self.normal_font = ImageFont.truetype("/usr/share/fonts/google-noto/NotoSansJP-Thin.otf", 16)
 
     def text(self, text, font=None, fill="white", x=60, y=30, direction="right"):
         if font is None:
