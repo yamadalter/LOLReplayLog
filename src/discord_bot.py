@@ -36,5 +36,5 @@ class RGCustoms(Client):
             and reaction.message.author == self.user):
 
             if reaction.count == 11:
-                await self.bot_funcs.make_team(reaction)
+                await self.bot_funcs.send_team(reaction)
                 await reaction.message.delete()

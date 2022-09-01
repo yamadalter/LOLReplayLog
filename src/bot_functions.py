@@ -1,18 +1,10 @@
-from src import image_gen, replay_reader, summoner_data
+from src import image_gen, replay_reader, summoner_data, skill_rating
 from discord import File, Embed, Colour
 import os
 import pandas as pd
 import numpy as np
-import yaml
-import trueskill
-import random
-mu = 1500.
-sigma = mu / 3.
-beta = sigma / 2.
-tau = sigma / 100.
-draw_probability = 0.1
-backend = None
 
+TEAM_NUM = 5
 LANE = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"]
 
 
@@ -29,17 +21,9 @@ def msg2sum(content, d_id):
 class BotFunctions():
     def __init__(self, prefix, user):
         super().__init__()
-        if os.path.exists("data/rating.yaml"):
-            with open("data/rating.yaml", "r", encoding="utf-8") as f:
-                self.ratings = yaml.load(f, Loader=yaml.FullLoader)
-        else:
-            with open("data/rating.yaml", "w", encoding="utf-8") as f:
-                self.ratings = {}
-        self.env = trueskill.TrueSkill(
-            mu=mu, sigma=sigma, beta=beta, tau=tau,
-            draw_probability=draw_probability, backend=backend)
         self.summoner_data = summoner_data.SummonerData()
         self.image_gen = image_gen.ImageGen()
+        self.skill_rating = skill_rating.SkillRating()
         self.prefix = prefix
         self.user = user
         self.commands = {"id": {"func": self.id, "help": "rg:id {ID} - Gets info of match ID"},
@@ -113,8 +97,8 @@ class BotFunctions():
                 with open("data/logged.txt", "a") as f:
                     f.write(f"{replay_id}\n")
                     self.summoner_data.log(replay_id)
-                    self.update_ratings(self.summoner_data.winners, self.summoner_data.losers)
-                    self.save_ratings()
+                    self.skill_rating.update_ratings(self.summoner_data.winners, self.summoner_data.losers)
+                    self.skill_rating.save_ratings()
 
             if message:
                 await message.reply(file=file, embed=embed)
@@ -142,10 +126,10 @@ class BotFunctions():
         else:
             await message.reply(content=self.summoner_data.link_id2sum(summoner_name, str(discord_id)))
 
-        if summoner_name in self.ratings.keys():
-            self.ratings[discord_id] = self.ratings[summoner_name]
-            del self.ratings[summoner_name]
-            self.save_ratings()
+        if summoner_name in self.skill_rating.ratings.keys():
+            self.skill_rating.ratings[discord_id] = self.skill_rating.ratings[summoner_name]
+            del self.skill_rating.ratings[summoner_name]
+            self.skill_rating.save_ratings()
 
     async def unlink(self, message):
         summoner_name, discord_id = msg2sum(message.content, message.author.id)
@@ -398,47 +382,16 @@ class BotFunctions():
             return
 
     async def team(self, message):
-
         new_message = await message.channel.send("参加する人は✅を押してください")
         await new_message.add_reaction("✅")
 
-    async def make_team(self, reaction):
-
-        players = []
-        maxq = 0
-        team = []
-        t_num = 5
-        async for user in reaction.users():
-            if not user == reaction.message.author:
-                if user.id not in self.ratings.keys():
-                    init = self.env.create_rating()
-                    self.ratings[user.id] = [init.mu, init.sigma]
-                players.append(user.id)
-
-        self.save_ratings()
-
-        for _ in range(252):
-            t1 = {}
-            t2 = {}
-            random.shuffle(players)
-            t1_id = players[:t_num]
-            t2_id = players[t_num:]
-            for j in range(t_num):
-                t1[t1_id[j]] = self.env.create_rating(self.ratings[t1_id[j]][0], self.ratings[t1_id[j]][1])
-                t2[t2_id[j]] = self.env.create_rating(self.ratings[t2_id[j]][0], self.ratings[t2_id[j]][1])
-            q = self.env.quality((t1, t2,))
-            if q > maxq:
-                team = [t1_id, t2_id]
-            if q > 0.85:
-                team = [t1_id, t2_id]
-                break
-
-        self.save_ratings()
+    async def send_team(self, reaction):
+        team = self.skill_rating.make_team(reaction)
         embed = Embed(title="Team", color=0xF945C0)
 
         team1 = ''
         team2 = ''
-        for i in range(t_num):
+        for i in range(TEAM_NUM):
             team1 += f'<@{team[0][i]}>\n\u200b'
             team2 += f'<@{team[1][i]}>\n\u200b'
 
@@ -446,43 +399,3 @@ class BotFunctions():
         embed.add_field(name="Team 2", value=team2)
 
         await reaction.message.channel.send(embed=embed)
-
-    async def update_ratings(self, winners, losers):
-        if len(winners) < 5 or len(losers) < 5:
-            return
-        t1, t2 = {}, {}
-        players = []
-        for p in winners:
-            id = self.summoner_data.id2sum.get(p, [])
-            if len(id) > 0:
-                name = id[0]
-            else:
-                name = p
-            players.append(name)
-            if name not in self.ratings.keys():
-                init = self.env.create_rating()
-                self.ratings[name] = [init.mu, init.sigma]
-            t1[name] = self.env.create_rating(self.ratings[name][0], self.ratings[name][1])
-
-        for p in losers:
-            id = self.summoner_data.id2sum.get(p, [])
-            if len(id) > 0:
-                name = id[0]
-            else:
-                name = p
-            players.append(name)
-            if name not in self.ratings.keys():
-                init = self.env.create_rating()
-                self.ratings[name] = [init.mu, init.sigma]
-            t2[name] = self.env.create_rating(self.ratings[name][0], self.ratings[name][1])
-
-        t1, t2, = self.env.rate((t1, t2,))
-        for name in players:
-            if name in t1.keys():
-                self.ratings[name] = [t1[name].mu, t1[name].sigma]
-            else:
-                self.ratings[name] = [t2[name].mu, t2[name].sigma]
-
-    def save_ratings(self):  # Saves sum2id yaml file
-        with open("data/ratings.yaml", "w", encoding="utf-8") as f:
-            yaml.dump(self.ratings, f, allow_unicode=True, encoding='utf-8')
