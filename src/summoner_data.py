@@ -13,6 +13,8 @@ def simplify(num):
 
 class SummonerData:
     def __init__(self):
+        self.winners = []
+        self.losers = []
         if os.path.exists("data/id_to_summoner.yaml"):
             with open("data/id_to_summoner.yaml", "r", encoding="utf-8") as f:
                 self.id2sum = yaml.load(f, Loader=yaml.FullLoader)
@@ -48,7 +50,7 @@ class SummonerData:
 
     def log(self, replay_id):  # Summoner name (file) -> map (1 of 2 lists) -> [Champion, game result, KDA]
         replay = replay_reader.ReplayReader(replay_id)
-        winners, losers = replay.results()  # Winners: [winners] Losers: [losers]
+        self.winners, self.losers = replay.results()
         pstats = replay.get_player_stats()
         df = pd.DataFrame()
         for player in pstats:
