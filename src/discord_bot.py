@@ -2,6 +2,7 @@ from discord import Client, Game
 from src import bot_functions
 import os
 
+TEAM_NUM = 5
 EMOJI_CHECK = "✅"
 
 class RGCustoms(Client):
@@ -35,6 +36,6 @@ class RGCustoms(Client):
             and reaction.message.content == "参加する人は✅を押してください"
             and reaction.message.author == self.user):
 
-            if reaction.count == 11:
+            if reaction.count == TEAM_NUM * 2 + 1:
                 await self.bot_funcs.send_team(reaction)
                 await reaction.message.delete()

@@ -105,6 +105,7 @@ class ReplayReader:
                 player_dict["gold"] = players["GOLD_EARNED"]
                 player_dict["items"] = items
                 player_dict["map"] = self.map
+                # player_dict["rate"] = rate[players["NAME"]]
                 player_list.append(player_dict)
         if len(player_list) == 1:
             return player_list[0]

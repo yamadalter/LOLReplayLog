@@ -17,32 +17,32 @@ SIGMA = MU / 3
 
 class SkillRating:
     def __init__(self):
-        if os.path.exists("data/rating.yaml"):
-            with open("data/rating.yaml", "r", encoding="utf-8") as f:
+        self.summoner_data = summoner_data.SummonerData()
+        if os.path.exists("data/ratings.yaml"):
+            with open("data/ratings.yaml", "r", encoding="utf-8") as f:
                 self.ratings = yaml.load(f, Loader=yaml.FullLoader)
         else:
-            with open("data/rating.yaml", "w", encoding="utf-8") as f:
+            with open("data/ratings.yaml", "w", encoding="utf-8") as f:
                 self.ratings = {}
 
     async def make_team(self, reaction):
         players = []
         async for user in reaction.users():
             if not user == reaction.message.author:
-                if user.id not in self.ratings.keys():
-                    self.ratings[user.id] = [MU, SIGMA]
+                if str(user.id) not in self.ratings.keys():
+                    self.ratings[str(user.id)] = [MU, SIGMA]
                 players.append(user.id)
-        self.save_ratings()
         minp = 1
         team = []
         for _ in range(252):
             t1 = []
             t2 = []
             random.shuffle(players)
-            t1_name = players[:5]
-            t2_name = players[5:]
-            for j in range(5):
-                t1.append(create_rating(self.ratings[t1_name[j]]))
-                t2.append(create_rating(self.ratings[t2_name[j]]))
+            t1_name = players[:TEAM_NUM]
+            t2_name = players[TEAM_NUM:]
+            for j in range(TEAM_NUM):
+                t1.append(create_rating(self.ratings[str(t1_name[j])]))
+                t2.append(create_rating(self.ratings[str(t2_name[j])]))
             predictions = self.predict_win(teams=[t1, t2])
 
             if np.abs(predictions[0] - predictions[1]) < minp:
@@ -55,9 +55,9 @@ class SkillRating:
         self.save_ratings()
         return team
 
-    def predict_win(teams: List[List[Rating]], **options) -> List[Union[int, float]]:
+    def predict_win(self, teams: List[List[Rating]], **options) -> List[Union[int, float]]:
         if len(teams) < 2:
-            raise ValueError(f"Expected at least two teams.")
+            raise ValueError("Expected at least two teams.")
 
         n = len(teams)
         denom = (n * (n - 1)) / 2
@@ -90,35 +90,39 @@ class SkillRating:
         t1, t2 = [], []
         t1_name, t2_name = [], []
         players = []
+        old = {}
         for p in winners:
-            id = summoner_data.id2sum.get(p, [])
+            id = self.summoner_data.id2sum.get(p, [])
             if len(id) > 0:
                 name = id[0]
             else:
                 name = p
             players.append(name)
             if name not in self.ratings.keys():
-                self.ratings[name] = [MU, SIGMA]
-            t1.append(create_rating(self.ratings[name]))
+                self.ratings[str(name)] = [MU, SIGMA]
+            t1.append(create_rating(self.ratings[str(name)]))
             t1_name.append(name)
         for p in losers:
-            id = summoner_data.id2sum.get(p, [])
+            id = self.summoner_data.id2sum.get(p, [])
             if len(id) > 0:
                 name = id[0]
             else:
                 name = p
             players.append(name)
             if name not in self.ratings.keys():
-                self.ratings[name] = [MU, SIGMA]
-            t2.append(create_rating(self.ratings[name]))
+                self.ratings[str(name)] = [MU, SIGMA]
+            t2.append(create_rating(self.ratings[str(name)]))
             t2_name.append(name)
 
-        [t1,t2] = rate([t1,t2])
+        [t1, t2] = rate([t1, t2])
         for t, name in zip(t1, t1_name):
-            self.ratings[name] = [t.mu, t.sigma]
+            old[str(name)] = self.ratings[str(name)]
+            self.ratings[str(name)] = [t.mu, t.sigma]
         for t, name in zip(t2, t2_name):
-            self.ratings[name] = [t.mu, t.sigma]
+            old[str(name)] = self.ratings[str(name)]
+            self.ratings[str(name)] = [t.mu, t.sigma]
 
+        self.save_ratings()
 
     def save_ratings(self):
         with open("data/ratings.yaml", "w", encoding="utf-8") as f:

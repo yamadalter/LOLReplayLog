@@ -74,17 +74,6 @@ class BotFunctions():
             except FileNotFoundError:
                 await message.reply(content="Replay file not found")
                 return
-            if not os.path.exists(f'data/match_imgs/{replay_id}.png'):
-                replay.generate_game_img()
-            embed = Embed(title="Replay", description=f"{replay_id}", color=Colour.blurple())
-            file = File(f'data/match_imgs/{replay_id}.png', filename="image.png")
-            embed.set_image(url="attachment://image.png")
-
-            alartlist, arrestlist = self.summoner_data.ward_alert(replay_id)
-            if len(alartlist) > 0:
-                embed.add_field(name="\nBuy more control wards! (Bought control ward : 1)", value=f"{' '.join(alartlist)}", inline=False)
-            if len(arrestlist) > 0:
-                embed.add_field(name="\n**I'm arresting you! (Bought control ward : 0)**", value=f"{' '.join(arrestlist)}", inline=False)
 
             if not os.path.exists("data/logged.txt"):
                 with open("data/logged.txt", "w") as f:
@@ -98,7 +87,18 @@ class BotFunctions():
                     f.write(f"{replay_id}\n")
                     self.summoner_data.log(replay_id)
                     self.skill_rating.update_ratings(self.summoner_data.winners, self.summoner_data.losers)
-                    self.skill_rating.save_ratings()
+
+            if not os.path.exists(f'data/match_imgs/{replay_id}.png'):
+                replay.generate_game_img()
+            embed = Embed(title="Replay", description=f"{replay_id}", color=Colour.blurple())
+            file = File(f'data/match_imgs/{replay_id}.png', filename="image.png")
+            embed.set_image(url="attachment://image.png")
+
+            alartlist, arrestlist = self.summoner_data.ward_alert(replay_id)
+            if len(alartlist) > 0:
+                embed.add_field(name="\nBuy more control wards! (Bought control ward : 1)", value=f"{' '.join(alartlist)}", inline=False)
+            if len(arrestlist) > 0:
+                embed.add_field(name="\n**I'm arresting you! (Bought control ward : 0)**", value=f"{' '.join(arrestlist)}", inline=False)
 
             if message:
                 await message.reply(file=file, embed=embed)
@@ -245,6 +245,11 @@ class BotFunctions():
 
             embed.set_author(name=summoner_name, icon_url=user_icon)
             embed.set_thumbnail(url="attachment://champ.png")
+            if discord_id is not None:
+                rate = int(self.skill_rating.ratings[str(discord_id)][0])
+            else:
+                rate = int(self.skill_rating.ratings[str(summoner_name)][0])
+            embed.add_field(name="Rating", value=f"{rate}", inline=False)
             embed.add_field(name="Winrate", value=f"{winrate:.3g}")
             embed.add_field(name="KDA", value=f"{average_kda:.3g}")
             embed.add_field(name="Wards", value=f"{average_vision_ward:.3g}")
@@ -386,14 +391,28 @@ class BotFunctions():
         await new_message.add_reaction("✅")
 
     async def send_team(self, reaction):
-        team = self.skill_rating.make_team(reaction)
+        team = await self.skill_rating.make_team(reaction)
+        list_of_key = list(self.summoner_data.id2sum.keys())
+        multi_list = list(self.summoner_data.id2sum.values())
+        list_of_value = [x[0] for x in multi_list]
         embed = Embed(title="Team", color=0xF945C0)
-
         team1 = ''
         team2 = ''
         for i in range(TEAM_NUM):
-            team1 += f'<@{team[0][i]}>\n\u200b'
-            team2 += f'<@{team[1][i]}>\n\u200b'
+            rate = int(self.skill_rating.ratings[str(team[0][i])][0])
+            if str(team[0][i]) in list_of_value:
+                position = list_of_value.index(str(team[0][i]))
+                name = list_of_key[position]
+            else:
+                name = 'not linked summoner'
+            team1 += f'<@{team[0][i]}> ({name}) {rate}\n\u200b'
+            rate = int(self.skill_rating.ratings[str(team[1][i])][0])
+            if str(team[1][i]) in list_of_value:
+                position = list_of_value.index(str(team[1][i]))
+                name = list_of_key[position]
+            else:
+                name = 'not linked summoner'
+            team2 += f'<@{team[1][i]}> ({name}) {rate}\n\u200b'
 
         embed.add_field(name="Team 1", value=team1)
         embed.add_field(name="Team 2", value=team2)
