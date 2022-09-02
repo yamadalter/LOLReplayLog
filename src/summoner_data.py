@@ -48,18 +48,15 @@ class SummonerData:
         else:
             return "Summoner was not linked"
 
-    def log(self, replay_id):  # Summoner name (file) -> map (1 of 2 lists) -> [Champion, game result, KDA]
+    def log(self, replay_id, old_df):  # Summoner name (file) -> map (1 of 2 lists) -> [Champion, game result, KDA]
         replay = replay_reader.ReplayReader(replay_id)
         self.winners, self.losers = replay.results()
         pstats = replay.get_player_stats()
         df = pd.DataFrame()
         for player in pstats:
             df = pd.concat([df, pd.DataFrame(player.values(), index=player.keys()).T])
-        if os.path.exists('data/log/log.csv'):
-            old_df = pd.read_csv('data/log/log.csv')
-            df = pd.concat([df, old_df])
-
-        df.to_csv('data/log/log.csv', index=False)
+        df = pd.concat([df, old_df])
+        return df
 
     def history(self, discord_id=None, summoner_name=None, mode="all"):
         names = []

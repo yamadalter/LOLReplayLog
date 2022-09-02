@@ -65,7 +65,8 @@ class BotFunctions():
             elif not os.path.exists("data/logged.txt"):
                 with open("data/logged.txt", "w") as f:
                     pass
-            self.summoner_data.log(replay_id)
+            self.df = self.summoner_data.log(replay_id, self.df)
+            self.df.to_csv('data/log/log.csv', index=False)
             with open("data/logged.txt", "a") as f:
                 f.write(f"{replay_id}\n")
             if message:
@@ -88,12 +89,12 @@ class BotFunctions():
             with open("data/logged.txt", "r") as f:
                 logged_ids = f.readlines()
 
-            if not replay_id + '\n' in logged_ids: 
+            if not replay_id + '\n' in logged_ids:
                 with open("data/logged.txt", "a") as f:
                     f.write(f"{replay_id}\n")
-                    self.summoner_data.log(replay_id)
+                    self.df = self.summoner_data.log(replay_id, self.df)
+                    self.df.to_csv('data/log/log.csv', index=False)
                     old_rating = self.skill_rating.update_ratings(self.summoner_data.winners, self.summoner_data.losers)
-                    self.team_result(message, replay_id, self.summoner_data.winners, self.summoner_data.losers, old_rating)
 
             if not os.path.exists(f'data/match_imgs/{replay_id}.png'):
                 replay.generate_game_img()
@@ -109,6 +110,8 @@ class BotFunctions():
 
             if message:
                 await message.reply(file=file, embed=embed)
+                if not replay_id + '\n' in logged_ids:
+                    await self.team_result(message, replay_id, self.summoner_data.winners, self.summoner_data.losers, old_rating)
 
     async def replay(self, message):  # Submit new replay
         attachments = message.attachments
@@ -436,34 +439,38 @@ class BotFunctions():
         for sn in winners:
             if sn in self.summoner_data.id2sum.keys():
                 id = self.summoner_data.id2sum[sn][0]
-                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'rate'] = old_rating[str(id)]
-                diff = int(self.skill_rating.ratings[str(id)][0] - old_rating[str(id)][0])
-                summoner_df = self.df[self.df["name"] == sn]
-                winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
-                win = int(sum(summoner_df["result"] == 'Win'))
-                lose = int(sum(summoner_df["result"] == 'Lose'))
-                rate = self.skill_rating.ratings[str(id)][0]
-                stats = f'Win:{win} Lose:{lose} {winrate:.3g} Rate{rate}(+{diff})'
-                team1 += f'<@{id}> ({sn}) \n\u200b {stats} \n\u200b'
+                team1 += f'<@{id}> ({sn}) \n\u200b'
             else:
-                stats = 'not linked summoner'
-                team1 += f'({sn}) \n\u200b {stats} \n\u200b'
+                id = sn
+                team1 += f'not linked summoner ({sn}) \n\u200b'
+            self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'mu'] = old_rating[str(id)][0]
+            self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'sigma'] = old_rating[str(id)][1]
+            diff = int(self.skill_rating.ratings[str(id)][0] - old_rating[str(id)][0])
+            summoner_df = self.df[self.df["name"] == sn]
+            winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
+            win = int(sum(summoner_df["result"] == 'Win'))
+            lose = int(sum(summoner_df["result"] == 'Lose'))
+            rate = int(self.skill_rating.ratings[str(id)][0])
+            stats = f'Win:{win} Lose:{lose} {winrate:.3g}% Rate:{rate} (+{diff})'
+            team1 += f'{stats} \n\u200b'
 
         for sn in losers:
             if sn in self.summoner_data.id2sum.keys():
                 id = self.summoner_data.id2sum[sn][0]
-                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'rate'] = old_rating[str(id)]
-                diff = int(self.skill_rating.ratings[str(id)][0] - old_rating[str(id)][0])
-                summoner_df = self.df[self.df["name"] == sn]
-                winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
-                win = int(sum(summoner_df["result"] == 'Win'))
-                lose = int(sum(summoner_df["result"] == 'Lose'))
-                rate = self.skill_rating.ratings[str(id)][0]
-                stats = f'Win:{win} Lose:{lose} {winrate:.3g} Rate{rate}({diff})'
-                team2 += f'<@{id}> ({sn}) \n\u200b {stats} \n\u200b'
+                team2 += f'<@{id}> ({sn}) \n\u200b'
             else:
-                stats = 'not linked summoner'
-                team2 += f'({sn}) \n\u200b {stats} \n\u200b'
+                id = sn
+                team2 += f'not linked summoner ({sn}) \n\u200b'
+            self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'mu'] = old_rating[str(id)][0]
+            self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'sigma'] = old_rating[str(id)][1]
+            diff = int(self.skill_rating.ratings[str(id)][0] - old_rating[str(id)][0])
+            summoner_df = self.df[self.df["name"] == sn]
+            winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
+            win = int(sum(summoner_df["result"] == 'Win'))
+            lose = int(sum(summoner_df["result"] == 'Lose'))
+            rate = int(self.skill_rating.ratings[str(id)][0])
+            stats = f'Win:{win} Lose:{lose} {winrate:.3g}% Rate:{rate} ({diff})'
+            team2 += f'{stats} \n\u200b'
         embed.add_field(name="Winners", value=team1, inline=False)
         embed.add_field(name="Losers", value=team2, inline=False)
         self.df.to_csv('data/log/log.csv', index=False)
@@ -482,13 +489,15 @@ class BotFunctions():
                         return
                     else:
                         game_df = self.df[self.df["game_id"] == replay_id]
-                        for index, row in game_df.iterrows():
+                        for _, row in game_df.iterrows():
                             name = row["name"]
-                            rate = row["rate"]
+                            mu = row["mu"]
+                            sigma = row["sigma"]
                             if name in self.summoner_data.id2sum.keys():
                                 name = self.summoner_data.id2sum[name][0]
-                            self.skill_rating.ratings[str(id)] = rate
+                            self.skill_rating.ratings[str(name)] = [mu, sigma]
+                        self.skill_rating.save_ratings()
                         target = self.df.index[self.df["game_id"] == replay_id]
-                        self.df.drop(target)
+                        self.df = self.df.drop(target)
                         self.df.to_csv('data/log/log.csv', index=False)
         await message.reply(content="Reverted")
