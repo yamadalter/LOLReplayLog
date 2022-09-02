@@ -30,13 +30,13 @@ class BotFunctions():
             self.df = pd.read_csv('data/log/log.csv')
         else:
             self.df = None
-        self.commands = {"id": {"func": self.id, "help": "rg:id {ID} - Gets info of match ID"},
+        self.commands = {"id": {"func": self.id, "help": "/id {ID} - Gets info of match ID"},
                          "replay": {"func": self.replay,
                                     "help": "/replay - Attach a .ROFL or .json from a replay for the bot to display"},
-                         "log": {"func": self.log, "help": "rg:log - Log a replay ID into the database"},
+                         "log": {"func": self.log, "help": "/log - Log a replay ID into the database"},
                          "link": {"func": self.link,
                                   "help": "/link {Summoner Name} - Links a summoner name to your Discord. Mention someone before the summoner name to link it to their Discord instead"},
-                         "unlink": {"func": self.unlink, "help": "rg:unlink {Summoner Name} - Opposite of rg:link"},
+                         "unlink": {"func": self.unlink, "help": "/unlink {Summoner Name} - Opposite of rg:link"},
                          "stats": {"func": self.stats,
                                     "help": "/stats {Summoner Name or @} {ha or sr, leave blank for all} - Get player's stats"},
                          "detail": {"func": self.detail,
@@ -45,6 +45,8 @@ class BotFunctions():
                                     "help": "/bestgame {Summoner Name or @}  - Get player's bestgame"},
                          "team": {"func": self.team,
                                     "help": "/team  - Get teams"},
+                         "revert": {"func": self.revert,
+                                    "help": "/revert {ID} - Revert game of match ID"},
                          "help": {"func": self.help,
                                   "help": "/help {command} - Get syntax for given command, leave blank for list of commands"}}
 
@@ -434,7 +436,7 @@ class BotFunctions():
         for sn in winners:
             if sn in self.summoner_data.id2sum.keys():
                 id = self.summoner_data.id2sum[sn][0]
-                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'rate'] = self.skill_rating.ratings[str(id)][0]
+                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'rate'] = old_rating[str(id)]
                 diff = int(self.skill_rating.ratings[str(id)][0] - old_rating[str(id)][0])
                 summoner_df = self.df[self.df["name"] == sn]
                 winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
@@ -442,14 +444,15 @@ class BotFunctions():
                 lose = int(sum(summoner_df["result"] == 'Lose'))
                 rate = self.skill_rating.ratings[str(id)][0]
                 stats = f'Win:{win} Lose:{lose} {winrate:.3g} Rate{rate}(+{diff})'
+                team1 += f'<@{id}> ({sn}) \n\u200b {stats} \n\u200b'
             else:
                 stats = 'not linked summoner'
-            team1 += f'<@{id}> ({sn}) \n\u200b {stats} \n\u200b'
+                team1 += f'({sn}) \n\u200b {stats} \n\u200b'
 
         for sn in losers:
             if sn in self.summoner_data.id2sum.keys():
                 id = self.summoner_data.id2sum[sn][0]
-                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'rate'] = self.skill_rating.ratings[str(id)][0]
+                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'rate'] = old_rating[str(id)]
                 diff = int(self.skill_rating.ratings[str(id)][0] - old_rating[str(id)][0])
                 summoner_df = self.df[self.df["name"] == sn]
                 winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
@@ -457,10 +460,35 @@ class BotFunctions():
                 lose = int(sum(summoner_df["result"] == 'Lose'))
                 rate = self.skill_rating.ratings[str(id)][0]
                 stats = f'Win:{win} Lose:{lose} {winrate:.3g} Rate{rate}({diff})'
+                team2 += f'<@{id}> ({sn}) \n\u200b {stats} \n\u200b'
             else:
                 stats = 'not linked summoner'
-            team2 += f'<@{id}> ({sn}) \n\u200b {stats} \n\u200b'
+                team2 += f'({sn}) \n\u200b {stats} \n\u200b'
         embed.add_field(name="Winners", value=team1, inline=False)
         embed.add_field(name="Losers", value=team2, inline=False)
-
+        self.df.to_csv('data/log/log.csv', index=False)
         await message.reply(embed=embed)
+
+    async def revert(self, message):
+        ids = message.content[8:].split(",")
+        for replay_id in ids:
+            if os.path.exists("data/logged.txt"):
+                with open("data/logged.txt", "r") as f:
+                    logged_ids = f.readlines()
+                    if replay_id + '\n' not in logged_ids:
+                        if message:
+                            await message.reply(
+                                content=f"Match {replay_id} was not found")
+                        return
+                    else:
+                        game_df = self.df[self.df["game_id"] == replay_id]
+                        for index, row in game_df.iterrows():
+                            name = row["name"]
+                            rate = row["rate"]
+                            if name in self.summoner_data.id2sum.keys():
+                                name = self.summoner_data.id2sum[name][0]
+                            self.skill_rating.ratings[str(id)] = rate
+                        target = self.df.index[self.df["game_id"] == replay_id]
+                        self.df.drop(target)
+                        self.df.to_csv('data/log/log.csv', index=False)
+        await message.reply(content="Reverted")
