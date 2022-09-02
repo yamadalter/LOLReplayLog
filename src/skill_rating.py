@@ -48,7 +48,7 @@ class SkillRating:
             if np.abs(predictions[0] - predictions[1]) < minp:
                 team = [t1_name, t2_name]
                 minp = np.abs(predictions[0] - predictions[1])
-            if predictions[0] < 0.52 and predictions[0] >= 0.48:
+            if predictions[0] < 0.55 and predictions[0] >= 0.45:
                 team = [t1_name, t2_name]
                 break
 
@@ -123,6 +123,7 @@ class SkillRating:
             self.ratings[str(name)] = [t.mu, t.sigma]
 
         self.save_ratings()
+        return old
 
     def save_ratings(self):
         with open("data/ratings.yaml", "w", encoding="utf-8") as f:

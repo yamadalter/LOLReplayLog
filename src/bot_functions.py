@@ -26,6 +26,10 @@ class BotFunctions():
         self.skill_rating = skill_rating.SkillRating()
         self.prefix = prefix
         self.user = user
+        if os.path.exists('data/log/log.csv'):
+            self.df = pd.read_csv('data/log/log.csv')
+        else:
+            self.df = None
         self.commands = {"id": {"func": self.id, "help": "rg:id {ID} - Gets info of match ID"},
                          "replay": {"func": self.replay,
                                     "help": "/replay - Attach a .ROFL or .json from a replay for the bot to display"},
@@ -86,7 +90,8 @@ class BotFunctions():
                 with open("data/logged.txt", "a") as f:
                     f.write(f"{replay_id}\n")
                     self.summoner_data.log(replay_id)
-                    self.skill_rating.update_ratings(self.summoner_data.winners, self.summoner_data.losers)
+                    old_rating = self.skill_rating.update_ratings(self.summoner_data.winners, self.summoner_data.losers)
+                    self.team_result(message, replay_id, self.summoner_data.winners, self.summoner_data.losers, old_rating)
 
             if not os.path.exists(f'data/match_imgs/{replay_id}.png'):
                 replay.generate_game_img()
@@ -184,9 +189,8 @@ class BotFunctions():
             name = summoner_name
             avator = None
 
-        if os.path.exists('data/log/log.csv'):
-            df = pd.read_csv('data/log/log.csv')
-            summoner_df = df[df["name"] == summoner_name]
+        if self.df is not None:
+            summoner_df = self.df[self.df["name"] == summoner_name]
 
             if len(summoner_df) < 1:
                 await message.reply(content="Log not found")
@@ -282,9 +286,8 @@ class BotFunctions():
         else:
             name = summoner_name
 
-        if os.path.exists('data/log/log.csv'):
-            df = pd.read_csv('data/log/log.csv')
-            summoner_df = df[df["name"] == summoner_name]
+        if self.df is not None:
+            summoner_df = self.df[self.df["name"] == summoner_name]
 
             if len(summoner_df) < 1:
                 await message.reply(content="Log not found")
@@ -326,9 +329,8 @@ class BotFunctions():
             name = summoner_name
             avator = None
 
-        if os.path.exists('data/log/log.csv'):
-            df = pd.read_csv('data/log/log.csv')
-            summoner_df = df[df["name"] == summoner_name]
+        if self.df is not None:
+            summoner_df = self.df[self.df["name"] == summoner_name]
 
             if len(summoner_df) < 1:
                 await message.reply(content="Log not found")
@@ -387,34 +389,78 @@ class BotFunctions():
             return
 
     async def team(self, message):
-        new_message = await message.channel.send("参加する人は✅を押してください")
+        new_message = await message.channel.send("カスタム参加する人は✅を押してください")
         await new_message.add_reaction("✅")
 
     async def send_team(self, reaction):
+
         team = await self.skill_rating.make_team(reaction)
-        list_of_key = list(self.summoner_data.id2sum.keys())
-        multi_list = list(self.summoner_data.id2sum.values())
-        list_of_value = [x[0] for x in multi_list]
         embed = Embed(title="Team", color=0xF945C0)
         team1 = ''
         team2 = ''
         for i in range(TEAM_NUM):
-            rate = int(self.skill_rating.ratings[str(team[0][i])][0])
-            if str(team[0][i]) in list_of_value:
-                position = list_of_value.index(str(team[0][i]))
-                name = list_of_key[position]
-            else:
-                name = 'not linked summoner'
-            team1 += f'<@{team[0][i]}> ({name}) {rate}\n\u200b'
-            rate = int(self.skill_rating.ratings[str(team[1][i])][0])
-            if str(team[1][i]) in list_of_value:
-                position = list_of_value.index(str(team[1][i]))
-                name = list_of_key[position]
-            else:
-                name = 'not linked summoner'
-            team2 += f'<@{team[1][i]}> ({name}) {rate}\n\u200b'
+            team1 += self.team_str(str(team[0][i]))
+            team2 += self.team_str(str(team[1][i]))
 
-        embed.add_field(name="Team 1", value=team1)
-        embed.add_field(name="Team 2", value=team2)
+        embed.add_field(name="Team 1", value=team1, inline=False)
+        embed.add_field(name="Team 2", value=team2, inline=False)
 
         await reaction.message.channel.send(embed=embed)
+
+    def team_str(self, id):
+        list_of_key = list(self.summoner_data.id2sum.keys())
+        multi_list = list(self.summoner_data.id2sum.values())
+        list_of_value = [x[0] for x in multi_list]
+        rate = int(self.skill_rating.ratings[str(id)][0])
+        if str(id) in list_of_value:
+            position = list_of_value.index(str(id))
+            name = list_of_key[position]
+        else:
+            name = 'not linked summoner'
+        summoner_df = self.df[self.df["name"] == name]
+        if len(summoner_df) < 1:
+            stats = 'Log not found'
+        else:
+            winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
+            win = int(sum(summoner_df["result"] == 'Win'))
+            lose = int(sum(summoner_df["result"] == 'Lose'))
+            stats = f'Win:{win} Lose:{lose} {winrate:.3g} Rate{rate}'
+        return f'<@{id}> ({name}) \n\u200b {stats} \n\u200b'
+
+    async def team_result(self, message, replay_id, winners, losers, old_rating):
+        embed = Embed(title="Team result", color=0xE0FFFF)
+        team1 = ''
+        team2 = ''
+        for sn in winners:
+            if sn in self.summoner_data.id2sum.keys():
+                id = self.summoner_data.id2sum[sn][0]
+                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'rate'] = self.skill_rating.ratings[str(id)][0]
+                diff = int(self.skill_rating.ratings[str(id)][0] - old_rating[str(id)][0])
+                summoner_df = self.df[self.df["name"] == sn]
+                winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
+                win = int(sum(summoner_df["result"] == 'Win'))
+                lose = int(sum(summoner_df["result"] == 'Lose'))
+                rate = self.skill_rating.ratings[str(id)][0]
+                stats = f'Win:{win} Lose:{lose} {winrate:.3g} Rate{rate}(+{diff})'
+            else:
+                stats = 'not linked summoner'
+            team1 += f'<@{id}> ({sn}) \n\u200b {stats} \n\u200b'
+
+        for sn in losers:
+            if sn in self.summoner_data.id2sum.keys():
+                id = self.summoner_data.id2sum[sn][0]
+                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'rate'] = self.skill_rating.ratings[str(id)][0]
+                diff = int(self.skill_rating.ratings[str(id)][0] - old_rating[str(id)][0])
+                summoner_df = self.df[self.df["name"] == sn]
+                winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
+                win = int(sum(summoner_df["result"] == 'Win'))
+                lose = int(sum(summoner_df["result"] == 'Lose'))
+                rate = self.skill_rating.ratings[str(id)][0]
+                stats = f'Win:{win} Lose:{lose} {winrate:.3g} Rate{rate}({diff})'
+            else:
+                stats = 'not linked summoner'
+            team2 += f'<@{id}> ({sn}) \n\u200b {stats} \n\u200b'
+        embed.add_field(name="Winners", value=team1, inline=False)
+        embed.add_field(name="Losers", value=team2, inline=False)
+
+        await message.reply(embed=embed)
