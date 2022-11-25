@@ -149,8 +149,8 @@ class SummonerData:
         list_of_key = list(self.id2sum.keys())
         multi_list = list(self.id2sum.values())
         list_of_value = [x[0] for x in multi_list]
-
-        position = list_of_value.index(discord_id)
-        summoner_name = list_of_key[position]
-
-        return summoner_name
+        if str(discord_id) in list_of_value:
+            position = list_of_value.index(discord_id)
+            return list_of_key[position]
+        else:
+            return None

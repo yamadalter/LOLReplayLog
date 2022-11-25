@@ -172,14 +172,7 @@ class BotFunctions():
     async def stats(self, message):
         summoner_name, discord_id = msg2sum(message.content, message.author.id)
         if discord_id is not None:
-            list_of_key = list(self.summoner_data.id2sum.keys())
-            multi_list = list(self.summoner_data.id2sum.values())
-            list_of_value = [x[0] for x in multi_list]
-
-            if discord_id in list_of_value:
-                position = list_of_value.index(discord_id)
-                summoner_name = list_of_key[position]
-
+            summoner_name = self.summoner_data.sum2id(str(discord_id))
             if summoner_name is None:
                 await message.reply(content="Summoner name is not linked")
                 return
@@ -286,14 +279,7 @@ class BotFunctions():
     async def bestgame(self, message):
         summoner_name, discord_id = msg2sum(message.content, message.author.id)
         if discord_id is not None:
-            list_of_key = list(self.summoner_data.id2sum.keys())
-            multi_list = list(self.summoner_data.id2sum.values())
-            list_of_value = [x[0] for x in multi_list]
-
-            if discord_id in list_of_value:
-                position = list_of_value.index(discord_id)
-                summoner_name = list_of_key[position]
-
+            summoner_name = self.summoner_data.sum2id(str(discord_id))
             if summoner_name is None:
                 await message.reply(content="Summoner name is not linked")
                 return
@@ -327,14 +313,7 @@ class BotFunctions():
 
         summoner_name, discord_id = msg2sum(message.content, message.author.id)
         if discord_id is not None:
-            list_of_key = list(self.summoner_data.id2sum.keys())
-            multi_list = list(self.summoner_data.id2sum.values())
-            list_of_value = [x[0] for x in multi_list]
-
-            if discord_id in list_of_value:
-                position = list_of_value.index(discord_id)
-                summoner_name = list_of_key[position]
-
+            summoner_name = self.summoner_data.sum2id(str(discord_id))
             if summoner_name is None:
                 await message.reply(content="Summoner name is not linked")
                 return
@@ -425,14 +404,9 @@ class BotFunctions():
         await reaction.message.channel.send(embed=embed)
 
     def team_str(self, id):
-        list_of_key = list(self.summoner_data.id2sum.keys())
-        multi_list = list(self.summoner_data.id2sum.values())
-        list_of_value = [x[0] for x in multi_list]
+        name = self.summoner_data.sum2id(str(id))
         rate = int(self.skill_rating.ratings[str(id)][0])
-        if str(id) in list_of_value:
-            position = list_of_value.index(str(id))
-            name = list_of_key[position]
-        else:
+        if name is None:
             name = 'not linked summoner'
         summoner_df = self.df[self.df["name"] == name]
         if len(summoner_df) < 1:
@@ -551,14 +525,7 @@ class BotFunctions():
 
         if name_space.startswith('<@') and name_space.endswith('>'):
             id = name_space
-            list_of_key = list(self.summoner_data.id2sum.keys())
-            multi_list = list(self.summoner_data.id2sum.values())
-            list_of_value = [x[0] for x in multi_list]
-            if id in list_of_value:
-                position = list_of_value.index(id)
-                sn = list_of_key[position]
-            else:
-                sn = None
+            sn = self.summoner_data.sum2id(id)
         else:
             sn = space_split[1]
             if id in self.summoner_data.id2sum.keys():
