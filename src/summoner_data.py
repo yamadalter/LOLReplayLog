@@ -39,14 +39,14 @@ class SummonerData:
             return "Summoner successfully linked"
 
     def unlink(self, summoner_name, discord_id):
-        summoner_names = self.sum2id.get(discord_id, [])
-        if summoner_name in summoner_names:
-            summoner_names.remove(summoner_name)
-            self.sum2id[discord_id] = summoner_names
-            self.save()
-            return "Summoner unlinked"
-        else:
-            return "Summoner was not linked"
+        if summoner_name is None:
+            if discord_id in self.id2sum:
+                summoner_name = self.sum2id(discord_id)
+            else:
+                return "Summoner was not linked"
+        del self.id2sum[summoner_name]
+        self.save_id2sum()
+        return "Summoner unlinked"
 
     def log(self, replay_id, old_df):  # Summoner name (file) -> map (1 of 2 lists) -> [Champion, game result, KDA]
         replay = replay_reader.ReplayReader(replay_id)
@@ -122,10 +122,6 @@ class SummonerData:
             champ_data_list.append(avg_champ_data)
         return champ_data_list
 
-    def save(self):  # Saves sum2id yaml file
-        with open("data/summoner_to_id.yaml", "w", encoding="utf-8") as f:
-            yaml.dump(self.sum2id, f, allow_unicode=True, encoding='utf-8')
-
     def save_id2sum(self): 
         with open("data/id_to_summoner.yaml", "w", encoding="utf-8") as f:
             yaml.dump(self.id2sum, f, allow_unicode=True, encoding='utf-8')
@@ -148,3 +144,13 @@ class SummonerData:
                 arrest_list.append(name)
 
         return alert_list, arrest_list
+
+    def sum2id(self, discord_id):
+        list_of_key = list(self.id2sum.keys())
+        multi_list = list(self.id2sum.values())
+        list_of_value = [x[0] for x in multi_list]
+
+        position = list_of_value.index(discord_id)
+        summoner_name = list_of_key[position]
+
+        return summoner_name

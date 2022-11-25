@@ -48,11 +48,11 @@ class SkillRating:
             if np.abs(predictions[0] - predictions[1]) < minp:
                 team = [t1_name, t2_name]
                 minp = np.abs(predictions[0] - predictions[1])
-            if predictions[0] < 0.55 and predictions[0] >= 0.45:
+            if predictions[0] < 0.53 and predictions[0] >= 0.47:
                 team = [t1_name, t2_name]
                 break
 
-        self.save_ratings()
+        self.save_ratings(self.ratings)
         return team
 
     def predict_win(self, teams: List[List[Rating]], **options) -> List[Union[int, float]]:
@@ -97,9 +97,9 @@ class SkillRating:
                 name = id[0]
             else:
                 name = p
+                if name not in self.ratings.keys():
+                    self.ratings[str(name)] = [MU, SIGMA]
             players.append(name)
-            if name not in self.ratings.keys():
-                self.ratings[str(name)] = [MU, SIGMA]
             t1.append(create_rating(self.ratings[str(name)]))
             t1_name.append(name)
         for p in losers:
@@ -108,9 +108,9 @@ class SkillRating:
                 name = id[0]
             else:
                 name = p
+                if name not in self.ratings.keys():
+                    self.ratings[str(name)] = [MU, SIGMA]
             players.append(name)
-            if name not in self.ratings.keys():
-                self.ratings[str(name)] = [MU, SIGMA]
             t2.append(create_rating(self.ratings[str(name)]))
             t2_name.append(name)
 
@@ -122,9 +122,22 @@ class SkillRating:
             old[str(name)] = self.ratings[str(name)]
             self.ratings[str(name)] = [t.mu, t.sigma]
 
-        self.save_ratings()
+        self.save_ratings(self.ratings)
         return old
 
-    def save_ratings(self):
+    def init_ratings(self, id, sn, mu=1500, sima=500):
+        if id is not None:
+            if id in self.ratings.keys():
+                self.ratings[str(id)] = [mu, sima]
+            elif (sn is not None) & (sn in self.ratings.keys()):
+                self.ratings[str(sn)] = [mu, sima]
+        else:
+            if sn is not None:
+                self.ratings[str(sn)] = [mu, sima]
+
+        self.save_ratings(self.ratings)
+
+    def save_ratings(self, ratings):
+        self.ratings = ratings
         with open("data/ratings.yaml", "w", encoding="utf-8") as f:
             yaml.dump(self.ratings, f, allow_unicode=True, encoding='utf-8')

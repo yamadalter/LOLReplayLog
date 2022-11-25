@@ -1,4 +1,6 @@
 from PIL import Image, ImageDraw, ImageFont
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 import json
 
 
@@ -172,3 +174,20 @@ class ImageGen:
         self.current_pixel = (0, 0)
         self.text(text=f"{overall_wins}W {overall_losses}L ({overall_wr}% Winrate)", font=self.large_font)
         self.current_image.save("temp.png")
+
+    def generate_rating_img(self, ratings, sigmas, name):
+
+        x = range(len(ratings))
+        l = len(ratings) - 1
+        plt.style.use('dark_background')
+        fig = plt.figure(figsize=(12, 4))
+        plt.rcParams["font.size"] = 12
+        plt.plot([0, l], [1500, 1500], '--b')
+        plt.xticks([])
+        ax = plt.subplot(111)
+        ax.plot(x, ratings, marker="o", color="lime")
+        ax.fill_between(x, ratings + sigmas, ratings - sigmas, alpha=0.15, color="aquamarine")
+        ax.set_xlim(0, l)
+        ax.set_title("Your Rating Transition")
+        ax.grid()
+        fig.savefig(f"data/ratings_imgs/{name}.png", transparent=True, bbox_inches='tight', pad_inches=0)

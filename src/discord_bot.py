@@ -33,7 +33,7 @@ class RGCustoms(Client):
             return
 
         if (reaction.emoji == EMOJI_CHECK
-            and reaction.message.content == "参加する人は✅を押してください"
+            and reaction.message.content == "@here カスタム参加する人は✅を押してください"
             and reaction.message.author == self.user):
 
             if reaction.count == TEAM_NUM * 2 + 1:

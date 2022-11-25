@@ -1,5 +1,5 @@
 from src import image_gen, replay_reader, summoner_data, skill_rating
-from discord import File, Embed, Colour
+from discord import File, Embed, Colour, AllowedMentions
 import os
 import pandas as pd
 import numpy as np
@@ -95,6 +95,7 @@ class BotFunctions():
                     self.df = self.summoner_data.log(replay_id, self.df)
                     self.df.to_csv('data/log/log.csv', index=False)
                     old_rating = self.skill_rating.update_ratings(self.summoner_data.winners, self.summoner_data.losers)
+                    await self.team_result(message, replay_id, self.summoner_data.winners, self.summoner_data.losers, old_rating)
 
             if not os.path.exists(f'data/match_imgs/{replay_id}.png'):
                 replay.generate_game_img()
@@ -110,8 +111,6 @@ class BotFunctions():
 
             if message:
                 await message.reply(file=file, embed=embed)
-                if not replay_id + '\n' in logged_ids:
-                    await self.team_result(message, replay_id, self.summoner_data.winners, self.summoner_data.losers, old_rating)
 
     async def replay(self, message):  # Submit new replay
         attachments = message.attachments
@@ -139,14 +138,11 @@ class BotFunctions():
         if summoner_name in self.skill_rating.ratings.keys():
             self.skill_rating.ratings[discord_id] = self.skill_rating.ratings[summoner_name]
             del self.skill_rating.ratings[summoner_name]
-            self.skill_rating.save_ratings()
+            self.skill_rating.save_ratings(self.skill_rating.ratings)
 
     async def unlink(self, message):
         summoner_name, discord_id = msg2sum(message.content, message.author.id)
-        if discord_id is None:
-            discord_id = message.author.id
-        else:
-            await message.reply(content=self.summoner_data.unlink(summoner_name, str(discord_id)))
+        await message.reply(content=self.summoner_data.unlink(summoner_name, str(discord_id)))
 
     async def help(self, message):
         space_split = message.content.split(" ")
@@ -229,7 +225,7 @@ class BotFunctions():
             else:
                 games = len(summoner_df)
             recent = '** '
-            for _, row in summoner_df[:games].iterrows():
+            for _, row in summoner_df[:games][::-1].iterrows():
                 if row["result"] == 'Win':
                     recent += ":blue_square: "
                 else:
@@ -255,10 +251,17 @@ class BotFunctions():
             embed.set_author(name=summoner_name, icon_url=user_icon)
             embed.set_thumbnail(url="attachment://champ.png")
             if discord_id is not None:
-                rate = int(self.skill_rating.ratings[str(discord_id)][0])
+                rate = self.skill_rating.ratings[str(discord_id)][0]
+                sigma = self.skill_rating.ratings[str(discord_id)][1]
             else:
-                rate = int(self.skill_rating.ratings[str(summoner_name)][0])
-            embed.add_field(name="Rating", value=f"{rate}", inline=False)
+                if summoner_name in self.skill_rating.ratings.keys():
+                    rate = self.skill_rating.ratings[str(summoner_name)][0]
+                    sigma = self.skill_rating.ratings[str(summoner_name)][1]
+                else:
+                    id = self.summoner_data.id2sum.get(summoner_name, [])[0]
+                    rate = self.skill_rating.ratings[str(id)][0]
+                    sigma = self.skill_rating.ratings[str(id)][1]
+            embed.add_field(name="Rating", value=f"{int(rate)}", inline=False)
             embed.add_field(name="Winrate", value=f"{winrate:.3g}")
             embed.add_field(name="KDA", value=f"{average_kda:.3g}")
             embed.add_field(name="Wards", value=f"{average_vision_ward:.3g}")
@@ -266,6 +269,14 @@ class BotFunctions():
             embed.add_field(name="\nRole", value=f"{role_str}", inline=False)
             embed.add_field(name="\nFavorite Champions", value=f"{champ_str}", inline=False)
             embed.add_field(name="\nRecent Games", value=f"{recent}", inline=False)
+
+            mus = summoner_df['mu'].values
+            sigmas = summoner_df['sigma'].values
+            mus = np.append(mus[::-1], rate)
+            sigmas = np.append(sigmas[::-1], sigma)
+            self.image_gen.generate_rating_img(mus, sigmas, summoner_name)
+            file = File(f'data/ratings_imgs/{summoner_name}.png', filename="image.png")
+            embed.set_image(url="attachment://image.png")
 
             await message.reply(file=file, embed=embed)
         else:
@@ -394,7 +405,8 @@ class BotFunctions():
             return
 
     async def team(self, message):
-        new_message = await message.channel.send("カスタム参加する人は✅を押してください")
+        allowed_mentions = AllowedMentions(everyone=True)
+        new_message = await message.channel.send("@here カスタム参加する人は✅を押してください", allowed_mentions=allowed_mentions)
         await new_message.add_reaction("✅")
 
     async def send_team(self, reaction):
@@ -424,12 +436,12 @@ class BotFunctions():
             name = 'not linked summoner'
         summoner_df = self.df[self.df["name"] == name]
         if len(summoner_df) < 1:
-            stats = 'Log not found'
+            stats = f'Log not found: Rate:{rate}'
         else:
             winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
             win = int(sum(summoner_df["result"] == 'Win'))
             lose = int(sum(summoner_df["result"] == 'Lose'))
-            stats = f'Win:{win} Lose:{lose} {winrate:.3g} Rate{rate}'
+            stats = f'Win:{win} Lose:{lose} {winrate:.3g}% Rate:{rate}'
         return f'<@{id}> ({name}) \n\u200b {stats} \n\u200b'
 
     async def team_result(self, message, replay_id, winners, losers, old_rating):
@@ -443,9 +455,14 @@ class BotFunctions():
             else:
                 id = sn
                 team1 += f'not linked summoner ({sn}) \n\u200b'
-            self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'mu'] = old_rating[str(id)][0]
-            self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'sigma'] = old_rating[str(id)][1]
-            diff = int(self.skill_rating.ratings[str(id)][0] - old_rating[str(id)][0])
+            if str(id) in old_rating.keys():
+                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'mu'] = old_rating[str(id)][0]
+                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'sigma'] = old_rating[str(id)][1]
+                diff = int(self.skill_rating.ratings[str(id)][0] - old_rating[str(id)][0])
+            else:
+                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'mu'] = 1500
+                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'sigma'] = 1500 / 3
+                diff = int(self.skill_rating.ratings[str(id)][0] - 1500)
             summoner_df = self.df[self.df["name"] == sn]
             winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
             win = int(sum(summoner_df["result"] == 'Win'))
@@ -496,8 +513,58 @@ class BotFunctions():
                             if name in self.summoner_data.id2sum.keys():
                                 name = self.summoner_data.id2sum[name][0]
                             self.skill_rating.ratings[str(name)] = [mu, sigma]
-                        self.skill_rating.save_ratings()
+                        self.skill_rating.save_ratings(self.skill_rating.ratings)
                         target = self.df.index[self.df["game_id"] == replay_id]
                         self.df = self.df.drop(target)
                         self.df.to_csv('data/log/log.csv', index=False)
+
+                        with open("data/logged.txt", "r") as f:
+                            data_lines = f.read()
+                        data_lines = data_lines.replace(replay_id + '\n', "")
+                        with open("data/logged.txt", "w") as f:
+                            f.write(data_lines)
+
+                        if(os.path.isfile(f'data/match_imgs/{replay_id}.png') is True):
+                            os.remove(f'data/match_imgs/{replay_id}.png')
+                        if(os.path.isfile(f'data/replays/{replay_id}.json') is True):
+                            os.remove(f'data/replays/{replay_id}.json')
+                        if(os.path.isfile(f'data/replays/{replay_id}.rofl') is True):
+                            os.remove(f'data/replays/{replay_id}.rofl')
+
         await message.reply(content="Reverted")
+
+    async def init_rate(self, message):
+
+        space_split = message.split(" ")
+        if len(space_split) == 1:
+            name_space = space_split[1]
+            mu = 1500
+            sigma = 500
+        elif len(space_split) == 2:
+            name_space = space_split[1]
+            mu = space_split[2]
+            sigma = 500
+        elif len(space_split) == 3:
+            name_space = space_split[1]
+            mu = space_split[2]
+            sigma = space_split[3]
+
+        if name_space.startswith('<@') and name_space.endswith('>'):
+            id = name_space
+            list_of_key = list(self.summoner_data.id2sum.keys())
+            multi_list = list(self.summoner_data.id2sum.values())
+            list_of_value = [x[0] for x in multi_list]
+            if id in list_of_value:
+                position = list_of_value.index(id)
+                sn = list_of_key[position]
+            else:
+                sn = None
+        else:
+            sn = space_split[1]
+            if id in self.summoner_data.id2sum.keys():
+                id = self.summoner_data.id2sum[sn][0]
+            else:
+                id = None
+        
+        self.skill_rating.init_rate(id, sn, mu, sigma)
+        await message.reply(content="Done")
