@@ -139,6 +139,9 @@ class BotFunctions():
             self.skill_rating.ratings[discord_id] = self.skill_rating.ratings[summoner_name]
             del self.skill_rating.ratings[summoner_name]
             self.skill_rating.save_ratings(self.skill_rating.ratings)
+        else:
+            self.skill_rating.init_ratings(discord_id, summoner_name)
+            self.skill_rating.save_ratings(self.skill_rating.ratings)
 
     async def unlink(self, message):
         summoner_name, discord_id = msg2sum(message.content, message.author.id)
@@ -532,6 +535,6 @@ class BotFunctions():
                 id = self.summoner_data.id2sum[sn][0]
             else:
                 id = None
-        
+
         self.skill_rating.init_rate(id, sn, mu, sigma)
         await message.reply(content="Done")

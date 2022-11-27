@@ -127,10 +127,11 @@ class SkillRating:
 
     def init_ratings(self, id, sn, mu=1500, sima=500):
         if id is not None:
-            if id in self.ratings.keys():
+            if (sn is not None) & (sn in self.ratings.keys()):
+                del self.ratings[str(sn)]
                 self.ratings[str(id)] = [mu, sima]
-            elif (sn is not None) & (sn in self.ratings.keys()):
-                self.ratings[str(sn)] = [mu, sima]
+            else:
+                self.ratings[str(id)] = [mu, sima]
         else:
             if sn is not None:
                 self.ratings[str(sn)] = [mu, sima]
