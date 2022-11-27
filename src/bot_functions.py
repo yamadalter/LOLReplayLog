@@ -13,6 +13,8 @@ def msg2sum(content, d_id):
     if len(space_split) == 1:
         return None, str(d_id)
     if space_split[1].startswith('<@') and space_split[1].endswith('>'):
+        if " ".join(space_split[2:]) == '':
+            return None, space_split[1][2:-1]
         return " ".join(space_split[2:]), space_split[1][2:-1]  # given summonername, given discord id
     else:
         return " ".join(space_split[1:]), None  # given summoner name, no discord id
