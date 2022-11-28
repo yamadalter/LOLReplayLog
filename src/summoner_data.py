@@ -20,7 +20,7 @@ class SummonerData:
                 self.id2sum = yaml.load(f, Loader=yaml.FullLoader)
         else:
             with open("data/id_to_summoner.yaml", "w", encoding="utf-8") as f:
-                self.id2sum = {}
+                self.id2sum = {'test': '0'}
 
     def link_id2sum(self, summoner_name, discord_id):
         ids = self.id2sum.get(summoner_name, [])

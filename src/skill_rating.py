@@ -23,7 +23,7 @@ class SkillRating:
                 self.ratings = yaml.load(f, Loader=yaml.FullLoader)
         else:
             with open("data/ratings.yaml", "w", encoding="utf-8") as f:
-                self.ratings = {}
+                self.ratings = {'test': [MU, SIGMA]}
 
     async def make_team(self, reaction):
         players = []
