@@ -457,9 +457,14 @@ class BotFunctions():
             else:
                 id = sn
                 team2 += f'not linked summoner ({sn}) \n\u200b'
-            self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'mu'] = old_rating[str(id)][0]
-            self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'sigma'] = old_rating[str(id)][1]
-            diff = int(self.skill_rating.ratings[str(id)][0] - old_rating[str(id)][0])
+            if str(id) in old_rating.keys():
+                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'mu'] = old_rating[str(id)][0]
+                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'sigma'] = old_rating[str(id)][1]
+                diff = int(self.skill_rating.ratings[str(id)][0] - old_rating[str(id)][0])
+            else:
+                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'mu'] = 1500
+                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'sigma'] = 1500 / 3
+                diff = int(self.skill_rating.ratings[str(id)][0] - 1500)
             summoner_df = self.df[self.df["name"] == sn]
             winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
             win = int(sum(summoner_df["result"] == 'Win'))
