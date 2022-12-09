@@ -133,17 +133,14 @@ class BotFunctions():
         summoner_name, discord_id = msg2sum(message.content, message.author.id)
         if discord_id is None:
             discord_id = message.author.id
-            await message.reply(content=self.summoner_data.link_id2sum(summoner_name, str(discord_id)))
-        else:
-            await message.reply(content=self.summoner_data.link_id2sum(summoner_name, str(discord_id)))
+        await message.reply(content=self.summoner_data.link_id2sum(summoner_name, str(discord_id)))
 
         if summoner_name in self.skill_rating.ratings.keys():
             self.skill_rating.ratings[discord_id] = self.skill_rating.ratings[summoner_name]
             del self.skill_rating.ratings[summoner_name]
-            self.skill_rating.save_ratings(self.skill_rating.ratings)
         else:
             self.skill_rating.init_ratings(discord_id, summoner_name)
-            self.skill_rating.save_ratings(self.skill_rating.ratings)
+        self.skill_rating.save_ratings(self.skill_rating.ratings)
 
     async def unlink(self, message):
         summoner_name, discord_id = msg2sum(message.content, message.author.id)
@@ -164,7 +161,7 @@ class BotFunctions():
                     help_str = self.commands[cmd]["help"]
             await message.reply(content=help_str)
         else:
-            await message.reply(content="Invalid syntax. Try rg:help {command}")
+            await message.reply(content="Invalid syntax. Try /help {command}")
 
     async def handle_message(self, message):
         cmd_split = message.content.split(self.prefix)
@@ -423,17 +420,15 @@ class BotFunctions():
             stats = f'Win:{win} Lose:{lose} {winrate:.3g}% Rate:{rate}'
         return f'<@{id}> ({name}) \n\u200b {stats} \n\u200b'
 
-    async def team_result(self, message, replay_id, winners, losers, old_rating):
-        embed = Embed(title="Team result", color=0xE0FFFF)
-        team1 = ''
-        team2 = ''
-        for sn in winners:
+    def result_str(self, replay_id, team, old_rating):
+        team_str = ''
+        for sn in team:
             if sn in self.summoner_data.id2sum.keys():
                 id = self.summoner_data.id2sum[sn][0]
-                team1 += f'<@{id}> ({sn}) \n\u200b'
+                team_str += f'<@{id}> ({sn}) \n\u200b'
             else:
                 id = sn
-                team1 += f'not linked summoner ({sn}) \n\u200b'
+                team_str += f'not linked summoner ({sn}) \n\u200b'
             if str(id) in old_rating.keys():
                 self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'mu'] = old_rating[str(id)][0]
                 self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'sigma'] = old_rating[str(id)][1]
@@ -448,30 +443,13 @@ class BotFunctions():
             lose = int(sum(summoner_df["result"] == 'Lose'))
             rate = int(self.skill_rating.ratings[str(id)][0])
             stats = f'Win:{win} Lose:{lose} {winrate:.3g}% Rate:{rate} (+{diff})'
-            team1 += f'{stats} \n\u200b'
+            team_str += f'{stats} \n\u200b'
+        return team_str
 
-        for sn in losers:
-            if sn in self.summoner_data.id2sum.keys():
-                id = self.summoner_data.id2sum[sn][0]
-                team2 += f'<@{id}> ({sn}) \n\u200b'
-            else:
-                id = sn
-                team2 += f'not linked summoner ({sn}) \n\u200b'
-            if str(id) in old_rating.keys():
-                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'mu'] = old_rating[str(id)][0]
-                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'sigma'] = old_rating[str(id)][1]
-                diff = int(self.skill_rating.ratings[str(id)][0] - old_rating[str(id)][0])
-            else:
-                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'mu'] = 1500
-                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'sigma'] = 1500 / 3
-                diff = int(self.skill_rating.ratings[str(id)][0] - 1500)
-            summoner_df = self.df[self.df["name"] == sn]
-            winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
-            win = int(sum(summoner_df["result"] == 'Win'))
-            lose = int(sum(summoner_df["result"] == 'Lose'))
-            rate = int(self.skill_rating.ratings[str(id)][0])
-            stats = f'Win:{win} Lose:{lose} {winrate:.3g}% Rate:{rate} ({diff})'
-            team2 += f'{stats} \n\u200b'
+    async def team_result(self, message, replay_id, winners, losers, old_rating):
+        embed = Embed(title="Team result", color=0xE0FFFF)
+        team1 = self.result_str(self, replay_id, winners, old_rating)
+        team2 = self.result_str(self, replay_id, losers, old_rating)
         embed.add_field(name="Winners", value=team1, inline=False)
         embed.add_field(name="Losers", value=team2, inline=False)
         self.df.to_csv('data/log/log.csv', index=False)

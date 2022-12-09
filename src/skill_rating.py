@@ -84,35 +84,27 @@ class SkillRating:
             )
         ]
 
+    def get_player(self, team):
+        t = []
+        t_name = []
+        for p in team:
+            id = self.summoner_data.id2sum.get(p, [])
+            if len(id) > 0:
+                name = id[0]
+            else:
+                name = p
+                if name not in self.ratings.keys():
+                    self.ratings[str(name)] = [MU, SIGMA]
+            t.append(create_rating(self.ratings[str(name)]))
+            t_name.append(name)
+
     def update_ratings(self, winners, losers):
         if len(winners) < TEAM_NUM or len(losers) < TEAM_NUM:
             return
-        t1, t2 = [], []
-        t1_name, t2_name = [], []
-        players = []
+
         old = {}
-        for p in winners:
-            id = self.summoner_data.id2sum.get(p, [])
-            if len(id) > 0:
-                name = id[0]
-            else:
-                name = p
-                if name not in self.ratings.keys():
-                    self.ratings[str(name)] = [MU, SIGMA]
-            players.append(name)
-            t1.append(create_rating(self.ratings[str(name)]))
-            t1_name.append(name)
-        for p in losers:
-            id = self.summoner_data.id2sum.get(p, [])
-            if len(id) > 0:
-                name = id[0]
-            else:
-                name = p
-                if name not in self.ratings.keys():
-                    self.ratings[str(name)] = [MU, SIGMA]
-            players.append(name)
-            t2.append(create_rating(self.ratings[str(name)]))
-            t2_name.append(name)
+        t1, t1_name = self.get_player(winners)
+        t2, t2_name = self.get_player(losers)
 
         [t1, t2] = rate([t1, t2])
         for t, name in zip(t1, t1_name):
@@ -129,9 +121,7 @@ class SkillRating:
         if id is not None:
             if (sn is not None) & (sn in self.ratings.keys()):
                 del self.ratings[str(sn)]
-                self.ratings[str(id)] = [mu, sima]
-            else:
-                self.ratings[str(id)] = [mu, sima]
+            self.ratings[str(id)] = [mu, sima]
         else:
             if sn is not None:
                 self.ratings[str(sn)] = [mu, sima]
