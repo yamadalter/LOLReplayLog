@@ -49,6 +49,8 @@ class BotFunctions():
                                     "help": "/team  - Get teams"},
                          "revert": {"func": self.revert,
                                     "help": "/revert {ID} - Revert game of match ID"},
+                         "rename": {"func": self.rename,
+                                    "help": "/rename {before sn},{after sn} - Rename summoner name"},
                          "help": {"func": self.help,
                                   "help": "/help {command} - Get syntax for given command, leave blank for list of commands"}}
 
@@ -523,3 +525,30 @@ class BotFunctions():
 
         self.skill_rating.init_rate(id, sn, mu, sigma)
         await message.reply(content="Done")
+
+    async def rename(self, message):
+        #  /rename Feder Kissen,Sakura Laurel
+        space_split = message.content.split(' ')
+        tmp_names = " ".join(space_split[1:])
+        old_sn = tmp_names.split(',')[0]
+        sn = tmp_names.split(',')[1]
+        # rename logdata
+        if self.df is not None:
+            summoner_df = self.df[self.df["name"] == old_sn]
+            if len(summoner_df) < 1:
+                await message.reply(content=f"summoner name {old_sn} Log not found")
+                return
+        else:
+            await message.reply(content="Log not found")
+            return
+        summoner_df["name"] = sn
+        await message.reply(content="Rename Successfully Log data")
+        # rename discord id
+        if old_sn in self.skill_rating.ratings.keys():
+            self.skill_rating.ratings[sn] = self.skill_rating.ratings.pop[old_sn]
+            self.skill_rating.save_ratings(self.skill_rating.ratings)
+        else:
+            await message.reply(content=f"{old_sn} not linked")
+            return
+        await message.reply(content="Rename Successfully discord id")
+        return
