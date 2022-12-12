@@ -41,7 +41,7 @@ class SummonerData:
     def unlink(self, summoner_name, discord_id):
         if summoner_name is None:
             summoner_name = self.sum2id(discord_id)
-        if not summoner_name in self.id2sum.keys():
+        if summoner_name not in self.id2sum.keys():
             return "Summoner was not linked"
         del self.id2sum[summoner_name]
         self.save_id2sum()

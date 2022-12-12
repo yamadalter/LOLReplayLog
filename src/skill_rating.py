@@ -97,6 +97,7 @@ class SkillRating:
                     self.ratings[str(name)] = [MU, SIGMA]
             t.append(create_rating(self.ratings[str(name)]))
             t_name.append(name)
+            return t, t_name
 
     def update_ratings(self, winners, losers):
         if len(winners) < TEAM_NUM or len(losers) < TEAM_NUM:

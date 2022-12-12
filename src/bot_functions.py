@@ -450,8 +450,8 @@ class BotFunctions():
 
     async def team_result(self, message, replay_id, winners, losers, old_rating):
         embed = Embed(title="Team result", color=0xE0FFFF)
-        team1 = self.result_str(self, replay_id, winners, old_rating)
-        team2 = self.result_str(self, replay_id, losers, old_rating)
+        team1 = self.result_str(replay_id, winners, old_rating)
+        team2 = self.result_str(replay_id, losers, old_rating)
         embed.add_field(name="Winners", value=team1, inline=False)
         embed.add_field(name="Losers", value=team2, inline=False)
         self.df.to_csv('data/log/log.csv', index=False)
@@ -541,12 +541,13 @@ class BotFunctions():
         else:
             await message.reply(content="Log not found")
             return
-        summoner_df["name"] = sn
+        self.df[self.df["name"] == old_sn]['name'] = sn
+        self.df.to_csv('data/log/log.csv', index=False)
         await message.reply(content="Rename Successfully Log data")
         # rename discord id
-        if old_sn in self.skill_rating.ratings.keys():
-            self.skill_rating.ratings[sn] = self.skill_rating.ratings.pop[old_sn]
-            self.skill_rating.save_ratings(self.skill_rating.ratings)
+        if old_sn in self.summoner_data.id2sum.keys():
+            self.summoner_data.id2sum[sn] = self.summoner_data.id2sum.pop(old_sn)
+            self.summoner_data.save_id2sum()
         else:
             await message.reply(content=f"{old_sn} not linked")
             return
