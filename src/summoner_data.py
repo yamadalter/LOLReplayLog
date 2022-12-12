@@ -131,15 +131,15 @@ class SummonerData:
         alert_list = []
         arrest_list = []
         for player in pstats:
-            id = self.id2sum.get(player['name'], [])
+            id = self.id2sum.get(player['NAME'], [])
             if len(id) > 0:
                 name = f'<@{id[0]}>'
             else:
-                name = player['name']
+                name = player['NAME']
 
-            if int(player['vision_ward']) == 1:
+            if int(player['VISION_WARDS_BOUGHT_IN_GAME']) == 1:
                 alert_list.append(name)
-            elif int(player['vision_ward']) < 1:
+            elif int(player['VISION_WARDS_BOUGHT_IN_GAME']) < 1:
                 arrest_list.append(name)
 
         return alert_list, arrest_list

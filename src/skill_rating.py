@@ -95,39 +95,36 @@ class SkillRating:
             else:
                 name = p
                 if name not in self.ratings.keys():
-                    self.ratings[str(name)] = [[MU], [SIGMA]]
+                    self.ratings[str(name)] = [[MU, SIGMA]]
                     self.save_ratings(self.ratings)
-            t.append(create_rating(self.ratings[str(name)]))
+            t.append(create_rating(self.ratings[str(name)][-1]))
             t_name.append(name)
-            return t, t_name
+        return t, t_name
 
     def update_ratings(self, winners, losers):
         if len(winners) < TEAM_NUM or len(losers) < TEAM_NUM:
             return
 
-        old = {}
         t1, t1_name = self.get_player(winners)
         t2, t2_name = self.get_player(losers)
 
         [t1, t2] = rate([t1, t2])
         for t, name in zip(t1, t1_name):
-            old[str(name)] = self.ratings[str(name)]
-            self.ratings[str(name)] = [t.mu, t.sigma]
+            self.ratings[str(name)].append([t.mu, t.sigma])
         for t, name in zip(t2, t2_name):
-            old[str(name)] = self.ratings[str(name)]
-            self.ratings[str(name)] = [t.mu, t.sigma]
+            self.ratings[str(name)].append([t.mu, t.sigma])
 
         self.save_ratings(self.ratings)
-        return old
+        return
 
-    def init_ratings(self, id, sn, mu=1500, sima=500):
+    def init_ratings(self, id, sn, mu=1500, sigma=500):
         if id is not None:
             if (sn is not None) & (sn in self.ratings.keys()):
                 del self.ratings[str(sn)]
-            self.ratings[str(id)] = self.ratings[str(id)].append([mu], [sima])
+            self.ratings[str(id)].append([mu, sigma])
         else:
             if sn is not None:
-                self.ratings[str(sn)] = self.ratings[str(sn)].append([mu], [sima])
+                self.ratings[str(sn)].append([mu, sigma])
 
         self.save_ratings(self.ratings)
 
