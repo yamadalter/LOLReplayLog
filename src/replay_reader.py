@@ -77,32 +77,14 @@ class ReplayReader:
             for i in range(7):
                 items.append(players[f"ITEM{i}"])
             if players["NAME"] == summoner_name or players["SKIN"] == champ or (summoner_name is None and champ is None):
+                player_dict = players
                 player_dict["game_id"] = self.match_id
-                player_dict["name"] = players["NAME"]
-                player_dict["champion"] = players["SKIN"]
-                player_dict["position"] = players["TEAM_POSITION"]
                 player_dict["result"] = 'Win' if players["WIN"] == "Win" else 'Lose'
                 player_dict["kda"] = f"{players['CHAMPIONS_KILLED']}/{players['NUM_DEATHS']}/{players['ASSISTS']}"
-                player_dict["kill"] = players["CHAMPIONS_KILLED"]
-                player_dict["death"] = players['NUM_DEATHS']
-                player_dict["assist"] = players['ASSISTS']
                 player_dict["cs"] = str(int(players["MINIONS_KILLED"]) + int(players["NEUTRAL_MINIONS_KILLED"]))
                 player_dict["csm"] = int(player_dict["cs"]) / (self.game_time / 60)
-                player_dict["vision_score"] = players["VISION_SCORE"]
-                player_dict["ward_placed"] = players["WARD_PLACED"]
-                player_dict["ward_kill"] = players["WARD_KILLED"]
-                player_dict["vision_ward"] = players["VISION_WARDS_BOUGHT_IN_GAME"]
-                player_dict["damage_to_champ"] = players['TOTAL_DAMAGE_DEALT_TO_CHAMPIONS']
-                player_dict["damage_taken"] = players['TOTAL_DAMAGE_TAKEN']
-                player_dict["double_kill"] = players["DOUBLE_KILLS"]
-                player_dict["triple_kill"] = players["TRIPLE_KILLS"]
-                player_dict["quadra_kill"] = players["QUADRA_KILLS"]
-                player_dict["penta_kill"] = players["PENTA_KILLS"]
                 player_dict["game_time"] = self.game_time
-                player_dict["keystone"] = players["KEYSTONE_ID"]
-                player_dict["subperk"] = players["PERK_SUB_STYLE"]
                 player_dict["runes"] = [[players["PERK1"], players["PERK2"], players["PERK3"]], [players["PERK4"], players["PERK5"]]]  # smaller runes
-                player_dict["gold"] = players["GOLD_EARNED"]
                 player_dict["items"] = items
                 player_dict["map"] = self.map
                 # player_dict["rate"] = rate[players["NAME"]]

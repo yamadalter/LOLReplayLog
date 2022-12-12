@@ -188,27 +188,27 @@ class BotFunctions():
             avator = None
 
         if self.df is not None:
-            summoner_df = self.df[self.df["name"] == summoner_name]
+            summoner_df = self.df[self.df["NAME"] == summoner_name]
 
             if len(summoner_df) < 1:
                 await message.reply(content="Log not found")
                 return
 
-            average_kill = str(sum(summoner_df["kill"].astype(int)) / len(summoner_df))
-            average_death = str(sum(summoner_df["death"].astype(int)) / len(summoner_df))
+            average_kill = str(sum(summoner_df["CHAMPIONS_KILLED"].astype(int)) / len(summoner_df))
+            average_death = str(sum(summoner_df["NUM_DEATHS"].astype(int)) / len(summoner_df))
             if average_death == '0.0':
                 average_death = '1.0'
-            average_assist = str(sum(summoner_df["assist"].astype(int)) / len(summoner_df))
+            average_assist = str(sum(summoner_df["ASSISTS"].astype(int)) / len(summoner_df))
             average_kda = (float(average_kill) + float(average_assist)) / float(average_death)
             winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
-            average_vision_ward = sum(summoner_df["vision_ward"].astype(int)) / len(summoner_df)
+            average_vision_ward = sum(summoner_df["VISION_WARDS_BOUGHT_IN_GAME"].astype(int)) / len(summoner_df)
 
             if len(summoner_df) > 4:
-                role = summoner_df['position'].value_counts()
-                champ = summoner_df["champion"].value_counts()[:5]
+                role = summoner_df['TEAM_POSITION'].value_counts()
+                champ = summoner_df["SKIN"].value_counts()[:5]
             else:
-                role = summoner_df['position'].value_counts()[:len(summoner_df)]
-                champ = summoner_df["champion"].value_counts()[:len(summoner_df)]
+                role = summoner_df['TEAM_POSITION'].value_counts()[:len(summoner_df)]
+                champ = summoner_df["SKIN"].value_counts()[:len(summoner_df)]
 
             famouschamp = champ.keys()[0]
             role_str = ''
@@ -248,16 +248,14 @@ class BotFunctions():
             embed.set_author(name=summoner_name, icon_url=user_icon)
             embed.set_thumbnail(url="attachment://champ.png")
             if discord_id is not None:
-                rate = self.skill_rating.ratings[str(discord_id)][0]
-                sigma = self.skill_rating.ratings[str(discord_id)][1]
+                name_key = str(discord_id)
             else:
                 if summoner_name in self.skill_rating.ratings.keys():
-                    rate = self.skill_rating.ratings[str(summoner_name)][0]
-                    sigma = self.skill_rating.ratings[str(summoner_name)][1]
+                    name_key = str(summoner_name)
                 else:
-                    id = self.summoner_data.id2sum.get(summoner_name, [])[0]
-                    rate = self.skill_rating.ratings[str(id)][0]
-                    sigma = self.skill_rating.ratings[str(id)][1]
+                    name_key = str(id)
+            rate = self.skill_rating.ratings[str(name_key)][0][-1]
+            sigma = self.skill_rating.ratings[str(name_key)][1][-1]
             embed.add_field(name="Rating", value=f"{int(rate)}", inline=False)
             embed.add_field(name="Winrate", value=f"{winrate:.3g}")
             embed.add_field(name="KDA", value=f"{average_kda:.3g}")
@@ -293,15 +291,15 @@ class BotFunctions():
             name = summoner_name
 
         if self.df is not None:
-            summoner_df = self.df[self.df["name"] == summoner_name]
+            summoner_df = self.df[self.df["NAME"] == summoner_name]
 
             if len(summoner_df) < 1:
                 await message.reply(content="Log not found")
                 return
 
-            kill = summoner_df["kill"].astype(int) / len(summoner_df)
-            death = summoner_df["death"].astype(int) / len(summoner_df)
-            assist = summoner_df["assist"].astype(int) / len(summoner_df)
+            kill = summoner_df["CHAMPIONS_KILLED"].astype(int) / len(summoner_df)
+            death = summoner_df["NUM_DEATHS"].astype(int) / len(summoner_df)
+            assist = summoner_df["ASSISTS"].astype(int) / len(summoner_df)
             kda = ((kill) + (assist)) / (death)
             max_index = np.argmax(kda)
             replay_id = list(summoner_df["game_id"])[max_index]
@@ -343,21 +341,21 @@ class BotFunctions():
             embed = Embed(title="Detail stats", description=f"**{name}**\nTotal Games {len(summoner_df)}\n", color=0xFFFFFF)
             embed.set_author(name=summoner_name, icon_url=user_icon)
             for lane in LANE:
-                lane_df = summoner_df[summoner_df["position"] == lane]
+                lane_df = summoner_df[summoner_df["TEAM_POSITION"] == lane]
                 if len(lane_df) > 0:
-                    average_kill = str(sum(lane_df["kill"].astype(int)) / len(lane_df))
-                    average_death = str(sum(lane_df["death"].astype(int)) / len(lane_df))
-                    average_assist = str(sum(lane_df["assist"].astype(int)) / len(lane_df))
+                    average_kill = str(sum(lane_df["CHAMPIONS_KILLED"].astype(int)) / len(lane_df))
+                    average_death = str(sum(lane_df["NUM_DEATHS"].astype(int)) / len(lane_df))
+                    average_assist = str(sum(lane_df["ASSISTS"].astype(int)) / len(lane_df))
                     if average_death == '0.0':
                         average_death = '1.0'
                     average_kda = (float(average_kill) + float(average_assist)) / float(average_death)
                     winrate = sum(lane_df["result"] == 'Win') / len(lane_df) * 100
-                    average_vision_ward = sum(lane_df["vision_ward"].astype(int)) / len(lane_df)
+                    average_vision_ward = sum(lane_df["VISION_WARDS_BOUGHT_IN_GAME"].astype(int)) / len(lane_df)
 
                     if len(lane_df) > 4:
-                        champ = lane_df["champion"].value_counts()[:5]
+                        champ = lane_df["SKIN"].value_counts()[:5]
                     else:
-                        champ = lane_df["champion"].value_counts()[:len(lane_df)]
+                        champ = lane_df["SKIN"].value_counts()[:len(lane_df)]
 
                     champ_str = ''
                     for index, v in champ.items():
@@ -369,14 +367,14 @@ class BotFunctions():
                     embed.add_field(name="Wards", value=f"{average_vision_ward:.3g}")
                     embed.add_field(name="\nFavorite Champions", value=f"{champ_str}\n\u200b", inline=False)
 
-            average_kill = str(sum(summoner_df["kill"].astype(int)) / len(summoner_df))
-            average_death = str(sum(summoner_df["death"].astype(int)) / len(summoner_df))
-            average_assist = str(sum(summoner_df["assist"].astype(int)) / len(summoner_df))
+            average_kill = str(sum(summoner_df["CHAMPIONS_KILLED"].astype(int)) / len(summoner_df))
+            average_death = str(sum(summoner_df["NUM_DEATHS"].astype(int)) / len(summoner_df))
+            average_assist = str(sum(summoner_df["ASSISTS"].astype(int)) / len(summoner_df))
             if average_death == '0.0':
                 average_death = '1.0'
             average_kda = (float(average_kill) + float(average_assist)) / float(average_death)
             winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
-            average_vision_ward = sum(summoner_df["vision_ward"].astype(int)) / len(summoner_df)
+            average_vision_ward = sum(summoner_df["VISION_WARDS_BOUGHT_IN_GAME"].astype(int)) / len(summoner_df)
 
             embed.add_field(name="Total Winrate", value=f"{winrate:.3g}")
             embed.add_field(name="KDA", value=f"{average_kda:.3g}")
@@ -409,10 +407,10 @@ class BotFunctions():
 
     def team_str(self, id):
         name = self.summoner_data.sum2id(str(id))
-        rate = int(self.skill_rating.ratings[str(id)][0])
+        rate = int(self.skill_rating.ratings[str(id)][0][-1])
         if name is None:
             name = 'not linked summoner'
-        summoner_df = self.df[self.df["name"] == name]
+        summoner_df = self.df[self.df["NAME"] == name]
         if len(summoner_df) < 1:
             stats = f'Log not found: Rate:{rate}'
         else:
@@ -432,18 +430,14 @@ class BotFunctions():
                 id = sn
                 team_str += f'not linked summoner ({sn}) \n\u200b'
             if str(id) in old_rating.keys():
-                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'mu'] = old_rating[str(id)][0]
-                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'sigma'] = old_rating[str(id)][1]
-                diff = int(self.skill_rating.ratings[str(id)][0] - old_rating[str(id)][0])
+                diff = int(self.skill_rating.ratings[str(id)][0][-1] - self.skill_rating.ratings[str(id)][0][-2])
             else:
-                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'mu'] = 1500
-                self.df.loc[(self.df["name"] == sn) & (self.df["game_id"] == replay_id), 'sigma'] = 1500 / 3
-                diff = int(self.skill_rating.ratings[str(id)][0] - 1500)
-            summoner_df = self.df[self.df["name"] == sn]
+                diff = int(self.skill_rating.ratings[str(id)][0][-1] - 1500)
+            summoner_df = self.df[self.df["NAME"] == sn]
             winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
             win = int(sum(summoner_df["result"] == 'Win'))
             lose = int(sum(summoner_df["result"] == 'Lose'))
-            rate = int(self.skill_rating.ratings[str(id)][0])
+            rate = int(self.skill_rating.ratings[str(id)][0][-1])
             stats = f'Win:{win} Lose:{lose} {winrate:.3g}% Rate:{rate} (+{diff})'
             team_str += f'{stats} \n\u200b'
         return team_str
@@ -471,11 +465,13 @@ class BotFunctions():
                     else:
                         game_df = self.df[self.df["game_id"] == replay_id]
                         for _, row in game_df.iterrows():
-                            name = row["name"]
+                            name = row["NAME"]
                             mu = row["mu"]
                             sigma = row["sigma"]
                             if name in self.summoner_data.id2sum.keys():
                                 name = self.summoner_data.id2sum[name][0]
+                            del self.skill_rating.ratings[str(name)][0][-1]
+                            del self.skill_rating.ratings[str(name)][1][-1]
                             self.skill_rating.ratings[str(name)] = [mu, sigma]
                         self.skill_rating.save_ratings(self.skill_rating.ratings)
                         target = self.df.index[self.df["game_id"] == replay_id]
@@ -534,14 +530,14 @@ class BotFunctions():
         sn = tmp_names.split(',')[1]
         # rename logdata
         if self.df is not None:
-            summoner_df = self.df[self.df["name"] == old_sn]
+            summoner_df = self.df[self.df["NAME"] == old_sn]
             if len(summoner_df) < 1:
                 await message.reply(content=f"summoner name {old_sn} Log not found")
                 return
         else:
             await message.reply(content="Log not found")
             return
-        self.df[self.df["name"] == old_sn]['name'] = sn
+        self.df[self.df["NAME"] == old_sn]['NAME'] = sn
         self.df.to_csv('data/log/log.csv', index=False)
         await message.reply(content="Rename Successfully Log data")
         # rename discord id
