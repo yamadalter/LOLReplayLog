@@ -50,7 +50,7 @@ class SkillRating:
             if np.abs(predictions[0] - predictions[1]) < minp:
                 team = [t1_name, t2_name]
                 minp = np.abs(predictions[0] - predictions[1])
-            if predictions[0] < 0.53 and predictions[0] >= 0.47:
+            if predictions[0] < 0.52 and predictions[0] >= 0.48:
                 team = [t1_name, t2_name]
                 break
 
@@ -125,14 +125,14 @@ class SkillRating:
                 for k, item in zip(KEY, ['reset', mu, sigma]):
                     self.ratings[str(id)][k].append(item)
             else:
-                self.ratings[str(id)] = {'id': ['init'], 'mu': [mu], 'simga': [sigma]}
+                self.ratings[str(id)] = {'id': ['init'], 'mu': [mu], 'sigma': [sigma]}
         else:
             if sn is not None:
                 if str(sn) in self.ratings.keys():
                     for k, item in zip(KEY, ['reset', mu, sigma]):
                         self.ratings[str(sn)][k].append(item)
                 else:
-                    self.ratings[str(sn)] = {'id': ['init'], 'mu': [mu], 'simga': [sigma]}
+                    self.ratings[str(sn)] = {'id': ['init'], 'mu': [mu], 'sigma': [sigma]}
 
         self.save_ratings(self.ratings)
 

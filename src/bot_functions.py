@@ -52,6 +52,8 @@ class BotFunctions():
                                     "help": "/revert {ID} - Revert game of match ID"},
                          "rename": {"func": self.rename,
                                     "help": "/rename {before sn},{after sn} - Rename summoner name"},
+                         "reset_rate": {"func": self.init_rate,
+                                    "help": "/reset_rate {Summoner Name or @},{rate -default 1500},{sigma --default 500} - Reset Rate"},
                          "help": {"func": self.help,
                                   "help": "/help {command} - Get syntax for given command, leave blank for list of commands"}}
 
@@ -494,31 +496,29 @@ class BotFunctions():
 
     async def init_rate(self, message):
 
-        space_split = message.split(" ")
-        if len(space_split) == 1:
-            name_space = space_split[1]
+        space_split = message.content.split(' ')
+        tmp_input = " ".join(space_split[1:]).split(',')
+        name_space = tmp_input[0]
+        if len(tmp_input) == 1:
             mu = 1500
             sigma = 500
-        elif len(space_split) == 2:
-            name_space = space_split[1]
-            mu = space_split[2]
+        elif len(tmp_input) == 2:
+            mu = tmp_input[1]
             sigma = 500
-        elif len(space_split) == 3:
-            name_space = space_split[1]
-            mu = space_split[2]
-            sigma = space_split[3]
-
+        elif len(tmp_input) == 3:
+            mu = tmp_input[1]
+            sigma = tmp_input[2]
         if name_space.startswith('<@') and name_space.endswith('>'):
-            id = name_space
+            id = name_space[2:-1]
             sn = self.summoner_data.sum2id(id)
         else:
-            sn = space_split[1]
-            if id in self.summoner_data.id2sum.keys():
+            sn = name_space
+            if sn in self.summoner_data.id2sum.keys():
                 id = self.summoner_data.id2sum[sn][0]
             else:
-                id = None
-
-        self.skill_rating.init_rate(id, sn, mu, sigma)
+                await message.reply(content=f"name ""{sn}"" is not found ")
+                return
+        self.skill_rating.init_ratings(id, sn, float(mu), float(sigma))
         await message.reply(content="Done")
 
     async def rename(self, message):

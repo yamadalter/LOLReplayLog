@@ -146,8 +146,6 @@ class ImageGen:
         plt.plot([0, n], [1500, 1500], '--b')
         plt.xticks([])
         ax = plt.subplot(111)
-        print(np.asarray(ratings, dtype='float'))
-        print(np.asarray(sigmas, dtype='float'))
         upper = np.asarray(ratings, dtype='float') + np.asarray(sigmas, dtype='float')
         lower = np.asarray(ratings, dtype='float') - np.asarray(sigmas, dtype='float')
         ax.plot(x, ratings, marker="o", color="lime")
