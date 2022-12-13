@@ -1,5 +1,6 @@
 import yaml
 import os
+import glob
 import random
 import itertools
 import math
@@ -13,24 +14,24 @@ from openskill.statistics import phi_major
 TEAM_NUM = 5
 MU = 1500
 SIGMA = MU / 3
+KEY = ['id', 'mu', 'sigma']
 
 
 class SkillRating:
     def __init__(self):
         self.summoner_data = summoner_data.SummonerData()
-        if os.path.exists("data/ratings.yaml"):
-            with open("data/ratings.yaml", "r", encoding="utf-8") as f:
-                self.ratings = yaml.load(f, Loader=yaml.FullLoader)
-        else:
-            with open("data/ratings.yaml", "w", encoding="utf-8") as f:
-                self.ratings = {'test': [MU, SIGMA]}
+        self.ratings = {}
+        for path in glob.glob('data/ratings/*.yaml'):
+            name = os.path.splitext(os.path.basename(path))[0]
+            with open(path, "r", encoding="utf-8") as f:
+                self.ratings[name] = yaml.load(f, Loader=yaml.FullLoader)
 
     async def make_team(self, reaction):
         players = []
         async for user in reaction.users():
             if not user == reaction.message.author:
                 if str(user.id) not in self.ratings.keys():
-                    self.ratings[str(user.id)] = [[MU], [SIGMA]]
+                    self.ratings[str(user.id)] = {'id': ['init'], 'mu': [MU], 'simga': [SIGMA]}
                     self.save_ratings(self.ratings)
                 players.append(user.id)
         minp = 1
@@ -42,8 +43,8 @@ class SkillRating:
             t1_name = players[:TEAM_NUM]
             t2_name = players[TEAM_NUM:]
             for j in range(TEAM_NUM):
-                t1.append(create_rating(self.ratings[str(t1_name[j])]))
-                t2.append(create_rating(self.ratings[str(t2_name[j])]))
+                t1.append(create_rating([self.ratings[str(t1_name[j])][k][-1] for k in KEY[1:]]))
+                t2.append(create_rating([self.ratings[str(t2_name[j])][k][-1] for k in KEY[1:]]))
             predictions = self.predict_win(teams=[t1, t2])
 
             if np.abs(predictions[0] - predictions[1]) < minp:
@@ -73,8 +74,7 @@ class SkillRating:
             sigma_b = current_team_b_rating[0][1]
             pairwise_probabilities.append(
                 phi_major(
-                    (mu_a - mu_b)
-                    / math.sqrt(n * beta(mu=1500) ** 2 + sigma_a + sigma_b)
+                    (mu_a - mu_b) / math.sqrt(n * beta(mu=1500) ** 2 + sigma_a + sigma_b)
                 )
             )
 
@@ -95,13 +95,13 @@ class SkillRating:
             else:
                 name = p
                 if name not in self.ratings.keys():
-                    self.ratings[str(name)] = [[MU, SIGMA]]
+                    self.ratings[str(name)] = {'id': ['init'], 'mu': [MU], 'simga': [SIGMA]}
                     self.save_ratings(self.ratings)
-            t.append(create_rating(self.ratings[str(name)][-1]))
+            t.append(create_rating([self.ratings[str(name)][k][-1] for k in KEY[1:]]))
             t_name.append(name)
         return t, t_name
 
-    def update_ratings(self, winners, losers):
+    def update_ratings(self, id, winners, losers):
         if len(winners) < TEAM_NUM or len(losers) < TEAM_NUM:
             return
 
@@ -110,25 +110,34 @@ class SkillRating:
 
         [t1, t2] = rate([t1, t2])
         for t, name in zip(t1, t1_name):
-            self.ratings[str(name)].append([t.mu, t.sigma])
+            for k, item in zip(KEY, [id, t.mu, t.sigma]):
+                self.ratings[str(name)][k].append(item)
         for t, name in zip(t2, t2_name):
-            self.ratings[str(name)].append([t.mu, t.sigma])
+            for k, item in zip(KEY, [id, t.mu, t.sigma]):
+                self.ratings[str(name)][k].append(item)
 
         self.save_ratings(self.ratings)
         return
 
     def init_ratings(self, id, sn, mu=1500, sigma=500):
         if id is not None:
-            if (sn is not None) & (sn in self.ratings.keys()):
-                del self.ratings[str(sn)]
-            self.ratings[str(id)].append([mu, sigma])
+            if str(id) in self.ratings.keys():
+                for k, item in zip(KEY, ['reset', mu, sigma]):
+                    self.ratings[str(id)][k].append(item)
+            else:
+                self.ratings[str(id)] = {'id': ['init'], 'mu': [mu], 'simga': [sigma]}
         else:
             if sn is not None:
-                self.ratings[str(sn)].append([mu, sigma])
+                if str(sn) in self.ratings.keys():
+                    for k, item in zip(KEY, ['reset', mu, sigma]):
+                        self.ratings[str(sn)][k].append(item)
+                else:
+                    self.ratings[str(sn)] = {'id': ['init'], 'mu': [mu], 'simga': [sigma]}
 
         self.save_ratings(self.ratings)
 
     def save_ratings(self, ratings):
         self.ratings = ratings
-        with open("data/ratings.yaml", "w", encoding="utf-8") as f:
-            yaml.dump(self.ratings, f, allow_unicode=True, encoding='utf-8')
+        for k in self.ratings.keys():
+            with open(f"data/ratings/{k}.yaml", "w", encoding="utf-8") as f:
+                yaml.dump(self.ratings[k], f, allow_unicode=True, encoding='utf-8')

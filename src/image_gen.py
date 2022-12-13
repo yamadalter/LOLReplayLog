@@ -1,5 +1,5 @@
 from PIL import Image, ImageDraw, ImageFont
-import matplotlib as mpl
+import numpy as np
 import matplotlib.pyplot as plt
 import json
 
@@ -139,16 +139,20 @@ class ImageGen:
     def generate_rating_img(self, ratings, sigmas, name):
 
         x = range(len(ratings))
-        l = len(ratings) - 1
+        n = len(ratings) - 1
         plt.style.use('dark_background')
         fig = plt.figure(figsize=(12, 4))
         plt.rcParams["font.size"] = 12
-        plt.plot([0, l], [1500, 1500], '--b')
+        plt.plot([0, n], [1500, 1500], '--b')
         plt.xticks([])
         ax = plt.subplot(111)
+        print(np.asarray(ratings, dtype='float'))
+        print(np.asarray(sigmas, dtype='float'))
+        upper = np.asarray(ratings, dtype='float') + np.asarray(sigmas, dtype='float')
+        lower = np.asarray(ratings, dtype='float') - np.asarray(sigmas, dtype='float')
         ax.plot(x, ratings, marker="o", color="lime")
-        ax.fill_between(x, ratings + sigmas, ratings - sigmas, alpha=0.15, color="aquamarine")
-        ax.set_xlim(0, l)
+        ax.fill_between(x, upper, lower, alpha=0.15, color="aquamarine")
+        ax.set_xlim(0, n)
         ax.set_title("Your Rating Transition")
         ax.grid()
         fig.savefig(f"data/ratings_imgs/{name}.png", transparent=True, bbox_inches='tight', pad_inches=0)

@@ -6,6 +6,7 @@ import numpy as np
 
 TEAM_NUM = 5
 LANE = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"]
+KEY = ['id', 'mu', 'sigma']
 
 
 def msg2sum(content, d_id):
@@ -98,7 +99,7 @@ class BotFunctions():
                     f.write(f"{replay_id}\n")
                     self.df = self.summoner_data.log(replay_id, self.df)
                     self.df.to_csv('data/log/log.csv', index=False)
-                    self.skill_rating.update_ratings(self.summoner_data.winners, self.summoner_data.losers)
+                    self.skill_rating.update_ratings(replay_id, self.summoner_data.winners, self.summoner_data.losers)
                     await self.team_result(message, self.summoner_data.winners, self.summoner_data.losers)
 
             if not os.path.exists(f'data/match_imgs/{replay_id}.png'):
@@ -140,6 +141,7 @@ class BotFunctions():
         if summoner_name in self.skill_rating.ratings.keys():
             self.skill_rating.ratings[discord_id] = self.skill_rating.ratings[summoner_name]
             del self.skill_rating.ratings[summoner_name]
+            os.remove(f'data/ratings/{summoner_name}.yaml')
         else:
             self.skill_rating.init_ratings(discord_id, summoner_name)
         self.skill_rating.save_ratings(self.skill_rating.ratings)
@@ -254,8 +256,7 @@ class BotFunctions():
                     name_key = str(summoner_name)
                 else:
                     name_key = str(id)
-            rate = self.skill_rating.ratings[str(name_key)][-1][0]
-            sigma = self.skill_rating.ratings[str(name_key)][-1][1]
+            rate = self.skill_rating.ratings[str(name_key)]['mu'][-1]
             embed.add_field(name="Rating", value=f"{int(rate)}", inline=False)
             embed.add_field(name="Winrate", value=f"{winrate:.3g}")
             embed.add_field(name="KDA", value=f"{average_kda:.3g}")
@@ -265,10 +266,8 @@ class BotFunctions():
             embed.add_field(name="\nFavorite Champions", value=f"{champ_str}", inline=False)
             embed.add_field(name="\nRecent Games", value=f"{recent}", inline=False)
 
-            mus = summoner_df['mu'].values
-            sigmas = summoner_df['sigma'].values
-            mus = np.append(mus[::-1], rate)
-            sigmas = np.append(sigmas[::-1], sigma)
+            mus = self.skill_rating.ratings[str(name_key)]['mu']
+            sigmas = self.skill_rating.ratings[str(name_key)]['sigma']
             self.image_gen.generate_rating_img(mus, sigmas, summoner_name)
             file = File(f'data/ratings_imgs/{summoner_name}.png', filename="image.png")
             embed.set_image(url="attachment://image.png")
@@ -327,7 +326,7 @@ class BotFunctions():
             avator = None
 
         if self.df is not None:
-            summoner_df = self.df[self.df["name"] == summoner_name]
+            summoner_df = self.df[self.df["NAME"] == summoner_name]
 
             if len(summoner_df) < 1:
                 await message.reply(content="Log not found")
@@ -407,7 +406,7 @@ class BotFunctions():
 
     def team_str(self, id):
         name = self.summoner_data.sum2id(str(id))
-        rate = int(self.skill_rating.ratings[str(id)][-1][0])
+        rate = int(self.skill_rating.ratings[str(id)]['mu'][-1])
         if name is None:
             name = 'not linked summoner'
         summoner_df = self.df[self.df["NAME"] == name]
@@ -429,15 +428,15 @@ class BotFunctions():
             else:
                 id = sn
                 team_str += f'not linked summoner ({sn}) \n\u200b'
-            if len(self.skill_rating.ratings[str(id)]) > 1:
-                diff = int(self.skill_rating.ratings[str(id)][-1][0] - self.skill_rating.ratings[str(id)][-2][0])
+            if len(self.skill_rating.ratings[str(id)]['mu']) > 1:
+                diff = int(self.skill_rating.ratings[str(id)]['mu'][-1] - self.skill_rating.ratings[str(id)]['mu'][-2])
             else:
-                diff = int(self.skill_rating.ratings[str(id)][-1][0] - 1500)
+                diff = 0
             summoner_df = self.df[self.df["NAME"] == sn]
             winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
             win = int(sum(summoner_df["result"] == 'Win'))
             lose = int(sum(summoner_df["result"] == 'Lose'))
-            rate = int(self.skill_rating.ratings[str(id)][-1][0])
+            rate = int(self.skill_rating.ratings[str(id)]['mu'][-1])
             if diff > 0:
                 diff = '+' + str(diff)
             stats = f'Win:{win} Lose:{lose} {winrate:.3g}% Rate:{rate} ({diff})'
@@ -468,12 +467,11 @@ class BotFunctions():
                         game_df = self.df[self.df["game_id"] == replay_id]
                         for _, row in game_df.iterrows():
                             name = row["NAME"]
-                            mu = row["mu"]
-                            sigma = row["sigma"]
                             if name in self.summoner_data.id2sum.keys():
                                 name = self.summoner_data.id2sum[name][0]
-                            del self.skill_rating.ratings[str(name)][-1][0]
-                            del self.skill_rating.ratings[str(name)][-1][1]
+                            idx = self.skill_rating.ratings[str(name)]['id'].index(replay_id)
+                            for k in KEY:
+                                self.skill_rating.ratings[str(name)][k].pop(idx)
                         self.skill_rating.save_ratings(self.skill_rating.ratings)
                         target = self.df.index[self.df["game_id"] == replay_id]
                         self.df = self.df.drop(target)
