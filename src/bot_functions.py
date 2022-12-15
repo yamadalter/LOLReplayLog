@@ -393,7 +393,7 @@ class BotFunctions():
         for vch in self.vc_list:
             for member in vch.voice_states.keys():
                 mention_str += '<@!' + str(member) + '> '
-        new_message = await message.channel.send(f"@here カスタム参加する人は✅を押してください \n\u200b{mention_str}", allowed_mentions=allowed_mentions)
+        new_message = await message.channel.send(f"カスタム参加する人は✅を押してください \n\u200b{mention_str}", allowed_mentions=allowed_mentions)
         await new_message.add_reaction("✅")
 
     async def send_team(self, reaction):

@@ -5,11 +5,12 @@ import os
 TEAM_NUM = 5
 EMOJI_CHECK = "✅"
 
+
 class RGCustoms(Client):
     def __init__(self, prefix, vc_list, **options):
         super().__init__(**options)
         self.prefix = prefix
-        self.vc_list = [vch for vch in self.get_channel(vc_list)]
+        self.vc_list = vc_list
         self.bot_funcs = bot_functions.BotFunctions(self.prefix, self.vc_list, self.fetch_user)
 
         req_directories = ['data', 'data/match_imgs', 'data/replays', 'data/players']
@@ -20,6 +21,7 @@ class RGCustoms(Client):
 
     async def on_ready(self):
         print(f"Logged in as {self.user}, ID {self.user.id}")
+        self.bot_funcs.vc_list = [self.get_channel(int(vch)) for vch in self.vc_list]
         await self.change_presence(activity=Game(name=f'{self.prefix}help'))
 
     async def on_message(self, message):
@@ -34,10 +36,10 @@ class RGCustoms(Client):
             return
 
         if (reaction.emoji == EMOJI_CHECK
-            and "@here カスタム参加する人は✅を押してください" in reaction.message.content
+            and "カスタム参加する人は✅を押してください" in reaction.message.content
             and reaction.message.author == self.user):
 
-            remove_str = '<@!' + str(reaction.message.author) + '>'
+            remove_str = f'<@!{str(author.id)}>'
             await reaction.message.edit(content=reaction.message.content.replace(remove_str, ''))
 
             if reaction.count == TEAM_NUM * 2 + 1:

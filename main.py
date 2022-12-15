@@ -10,6 +10,6 @@ if token == "":
     print("Add your token to config.ini. You can find it at the Discord developer portal, under Bot.")
     exit()
 prefix = section['prefix']
-vc_list = json.loads(config.get("VC", "vc_list"))
+vc_list = json.loads(section['vc_list'])
 RGCustomsBot = discord_bot.RGCustoms(prefix, vc_list)
 RGCustomsBot.run(token)
