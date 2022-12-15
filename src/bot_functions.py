@@ -257,7 +257,7 @@ class BotFunctions():
                 if summoner_name in self.skill_rating.ratings.keys():
                     name_key = str(summoner_name)
                 else:
-                    name_key = str(id)
+                    name_key = self.summoner_data.id2sum(str(summoner_name))[0]
             rate = self.skill_rating.ratings[str(name_key)]['mu'][-1]
             embed.add_field(name="Rating", value=f"{int(rate)}", inline=False)
             embed.add_field(name="Winrate", value=f"{winrate:.3g}")
