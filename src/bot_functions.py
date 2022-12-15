@@ -22,12 +22,13 @@ def msg2sum(content, d_id):
 
 
 class BotFunctions():
-    def __init__(self, prefix, user):
+    def __init__(self, prefix, vc_list, user):
         super().__init__()
         self.summoner_data = summoner_data.SummonerData()
         self.image_gen = image_gen.ImageGen()
         self.skill_rating = skill_rating.SkillRating()
         self.prefix = prefix
+        self.vc_list = vc_list
         self.user = user
         if os.path.exists('data/log/log.csv'):
             self.df = pd.read_csv('data/log/log.csv')
@@ -257,7 +258,7 @@ class BotFunctions():
                 if summoner_name in self.skill_rating.ratings.keys():
                     name_key = str(summoner_name)
                 else:
-                    name_key = self.summoner_data.id2sum(str(summoner_name))[0]
+                    name_key = self.summoner_data.id2sum.get(str(summoner_name))[0]
             rate = self.skill_rating.ratings[str(name_key)]['mu'][-1]
             embed.add_field(name="Rating", value=f"{int(rate)}", inline=False)
             embed.add_field(name="Winrate", value=f"{winrate:.3g}")
@@ -388,7 +389,11 @@ class BotFunctions():
 
     async def team(self, message):
         allowed_mentions = AllowedMentions(everyone=True)
-        new_message = await message.channel.send("@here カスタム参加する人は✅を押してください", allowed_mentions=allowed_mentions)
+        mention_str = ''
+        for vch in self.vc_list:
+            for member in vch.voice_states.keys():
+                mention_str += '<@!' + str(member) + '> '
+        new_message = await message.channel.send(f"@here カスタム参加する人は✅を押してください \n\u200b{mention_str}", allowed_mentions=allowed_mentions)
         await new_message.add_reaction("✅")
 
     async def send_team(self, reaction):
@@ -425,7 +430,7 @@ class BotFunctions():
         team_str = ''
         for sn in team:
             if sn in self.summoner_data.id2sum.keys():
-                id = self.summoner_data.id2sum[sn][0]
+                id = self.summoner_data.id2sum.get(sn)[0]
                 team_str += f'<@{id}> ({sn}) \n\u200b'
             else:
                 id = sn
@@ -470,7 +475,7 @@ class BotFunctions():
                         for _, row in game_df.iterrows():
                             name = row["NAME"]
                             if name in self.summoner_data.id2sum.keys():
-                                name = self.summoner_data.id2sum[name][0]
+                                name = self.summoner_data.id2sum.get(name)[0]
                             idx = self.skill_rating.ratings[str(name)]['id'].index(replay_id)
                             for k in KEY:
                                 self.skill_rating.ratings[str(name)][k].pop(idx)
@@ -514,7 +519,7 @@ class BotFunctions():
         else:
             sn = name_space
             if sn in self.summoner_data.id2sum.keys():
-                id = self.summoner_data.id2sum[sn][0]
+                id = self.summoner_data.id2sum.get(sn)[0]
             else:
                 await message.reply(content=f"name ""{sn}"" is not found ")
                 return
