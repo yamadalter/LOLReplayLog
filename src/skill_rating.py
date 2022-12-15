@@ -31,7 +31,7 @@ class SkillRating:
         async for user in reaction.users():
             if not user == reaction.message.author:
                 if str(user.id) not in self.ratings.keys():
-                    self.ratings[str(user.id)] = {'id': ['init'], 'mu': [MU], 'simga': [SIGMA]}
+                    self.ratings[str(user.id)] = {'id': ['init'], 'mu': [MU], 'sigma': [SIGMA]}
                     self.save_ratings(self.ratings)
                 players.append(user.id)
         minp = 1
@@ -95,7 +95,7 @@ class SkillRating:
             else:
                 name = p
                 if name not in self.ratings.keys():
-                    self.ratings[str(name)] = {'id': ['init'], 'mu': [MU], 'simga': [SIGMA]}
+                    self.ratings[str(name)] = {'id': ['init'], 'mu': [MU], 'sigma': [SIGMA]}
                     self.save_ratings(self.ratings)
             t.append(create_rating([self.ratings[str(name)][k][-1] for k in KEY[1:]]))
             t_name.append(name)
