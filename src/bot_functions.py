@@ -102,8 +102,11 @@ class BotFunctions():
                     f.write(f"{replay_id}\n")
                     self.df = self.summoner_data.log(replay_id, self.df)
                     self.df.to_csv('data/log/log.csv', index=False)
-                    self.skill_rating.update_ratings(replay_id, self.summoner_data.winners, self.summoner_data.losers)
-                    await self.team_result(message, self.summoner_data.winners, self.summoner_data.losers)
+                    flag = self.skill_rating.update_ratings(replay_id, self.summoner_data.winners, self.summoner_data.losers)
+                    if flag:
+                        await self.team_result(message, self.summoner_data.winners, self.summoner_data.losers)
+                    else:
+                        await message.reply(content="not linked summoner found")
 
             if not os.path.exists(f'data/match_imgs/{replay_id}.png'):
                 replay.generate_game_img()
@@ -541,7 +544,7 @@ class BotFunctions():
         else:
             await message.reply(content="Log not found")
             return
-        self.df[self.df["NAME"] == old_sn]['NAME'] = sn
+        self.df = self.df.replace(old_sn, sn)
         self.df.to_csv('data/log/log.csv', index=False)
         await message.reply(content="Rename Successfully Log data")
         # rename discord id

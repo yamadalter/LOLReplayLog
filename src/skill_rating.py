@@ -86,28 +86,27 @@ class SkillRating:
         ]
 
     def get_player(self, team):
+        Summoner_data = summoner_data.SummonerData()
         t = []
         t_name = []
         for p in team:
-            id = self.summoner_data.id2sum.get(p, [])
-            if len(id) > 0:
+            id = Summoner_data.id2sum.get(p, None)
+            if id is not None:
                 name = id[0]
             else:
-                name = p
-                if name not in self.ratings.keys():
-                    self.ratings[str(name)] = {'id': ['init'], 'mu': [MU], 'sigma': [SIGMA]}
-                    self.save_ratings(self.ratings)
+                return None, p
             t.append(create_rating([self.ratings[str(name)][k][-1] for k in KEY[1:]]))
             t_name.append(name)
         return t, t_name
 
     def update_ratings(self, id, winners, losers):
         if len(winners) < TEAM_NUM or len(losers) < TEAM_NUM:
-            return
+            return False
 
         t1, t1_name = self.get_player(winners)
         t2, t2_name = self.get_player(losers)
-
+        if t1 is None or t2 is None:
+            return False
         [t1, t2] = rate([t1, t2])
         for t, name in zip(t1, t1_name):
             for k, item in zip(KEY, [id, t.mu, t.sigma]):
@@ -117,7 +116,7 @@ class SkillRating:
                 self.ratings[str(name)][k].append(item)
 
         self.save_ratings(self.ratings)
-        return
+        return True
 
     def init_ratings(self, id, sn, mu=1500, sigma=500):
         if id is not None:
