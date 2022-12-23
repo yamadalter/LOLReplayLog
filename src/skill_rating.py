@@ -19,7 +19,6 @@ KEY = ['id', 'mu', 'sigma']
 
 class SkillRating:
     def __init__(self):
-        self.summoner_data = summoner_data.SummonerData()
         self.ratings = {}
         for path in glob.glob('data/ratings/*.yaml'):
             name = os.path.splitext(os.path.basename(path))[0]
