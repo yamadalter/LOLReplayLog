@@ -24,3 +24,4 @@ trueskill==0.4.5
 toml==0.10.1
 wrapt==1.12.1
 yarl==1.5.1
+riotwatcher==3.2.4
