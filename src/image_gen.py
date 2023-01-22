@@ -7,7 +7,7 @@ import json
 class ImageGen:
     def __init__(self):
         try:
-            with open("data/runesReforged.json", "r") as f:
+            with open("data/runesReforged.json", "r", encoding="utf-8") as f:
                 self.rune_data = json.load(f)
         except FileNotFoundError:
             print("data/runesReforged.json not found. Download it from Riot's datadragon and restart.")
@@ -15,8 +15,8 @@ class ImageGen:
         self.current_image = None
         self.draw = None
         self.current_pixel = (0, 0)
-        self.large_font = ImageFont.truetype("/usr/share/fonts/google-noto/NotoSansJP-Thin.otf", 24)
-        self.normal_font = ImageFont.truetype("/usr/share/fonts/google-noto/NotoSansJP-Thin.otf", 16)
+        self.large_font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 24)
+        self.normal_font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 16)
 
     def text(self, text, font=None, fill="white", x=60, y=30, direction="right"):
         if font is None:

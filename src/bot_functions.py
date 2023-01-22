@@ -3,6 +3,8 @@ from discord import File, Embed, Colour, AllowedMentions
 import os
 import pandas as pd
 import numpy as np
+import configparser
+import json
 
 TEAM_NUM = 5
 LANE = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"]
@@ -22,13 +24,18 @@ def msg2sum(content, d_id):
 
 
 class BotFunctions():
-    def __init__(self, prefix, vc_list, user):
+    def __init__(self, prefix, user):
         super().__init__()
+        config = configparser.ConfigParser()
+        config.read('config.ini')
+        section = config['ROLE']
+        self.linked = section['linked']
+        self.rate_1500, self.rate_2000, self.rate_2500 = section['1500'], section['2000'], section['2500']
         self.summoner_data = summoner_data.SummonerData()
         self.image_gen = image_gen.ImageGen()
         self.skill_rating = skill_rating.SkillRating()
         self.prefix = prefix
-        self.vc_list = vc_list
+
         self.user = user
         if os.path.exists('data/log/log.csv'):
             self.df = pd.read_csv('data/log/log.csv')
@@ -139,18 +146,39 @@ class BotFunctions():
             await message.reply(content="No replay file attached")
 
     async def link(self, message):
+        # link id
         summoner_name, discord_id = msg2sum(message.content, message.author.id)
         if discord_id is None:
             discord_id = message.author.id
         await message.reply(content=self.summoner_data.link_id2sum(summoner_name, str(discord_id)))
 
+        # set rating
+        roleids = [self.linked]
         if summoner_name in self.skill_rating.ratings.keys():
             self.skill_rating.ratings[discord_id] = self.skill_rating.ratings[summoner_name]
             del self.skill_rating.ratings[summoner_name]
             os.remove(f'data/ratings/{summoner_name}.yaml')
         else:
-            self.skill_rating.init_ratings(discord_id, summoner_name)
+            valid, mu = self.skill_rating.init_ratings(discord_id, summoner_name)
+            if valid is None:
+                await message.reply(content="unranked summmoner. Rate:1500")
+            else:
+                await message.reply(content=valid)
+                if mu <= 1500:
+                    roleids.append(self.rate_1500)
+                elif mu <= 2000:
+                    roleids.append(self.rate_2000)
+                elif mu <= 2500:
+                    roleids.append(self.rate_2500)
         self.skill_rating.save_ratings(self.skill_rating.ratings)
+
+        # change nickname & role
+        guild = message.guild
+        member = guild.get_member(discord_id)
+        roles = [guild.get_role(int(role)) for role in roleids]
+        await member.edit(nick=summoner_name)
+        for role in roles:
+            await member.add_roles(role)
 
     async def unlink(self, message):
         summoner_name, discord_id = msg2sum(message.content, message.author.id)
@@ -270,7 +298,7 @@ class BotFunctions():
 
             embed.add_field(name="\nRole", value=f"{role_str}", inline=False)
             embed.add_field(name="\nFavorite Champions", value=f"{champ_str}", inline=False)
-            embed.add_field(name="\nRecent Games", value=f"{recent}", inline=False)
+            # embed.add_field(name="\nRecent Games", value=f"{recent}", inline=False)
 
             mus = self.skill_rating.ratings[str(name_key)]['mu']
             sigmas = self.skill_rating.ratings[str(name_key)]['sigma']
@@ -393,9 +421,11 @@ class BotFunctions():
     async def team(self, message):
         allowed_mentions = AllowedMentions(everyone=True)
         mention_str = ''
-        for vch in self.vc_list:
-            for member in vch.voice_states.keys():
-                mention_str += '<@!' + str(member) + '> '
+        voice_chs = message.channel.category.voice_channels
+
+        for vch in voice_chs:
+            for member in vch.members:
+                mention_str += '<@!' + str(member.id) + '> '
         new_message = await message.channel.send(f"カスタム参加する人は✅を押してください \n\u200b{mention_str}", allowed_mentions=allowed_mentions)
         await new_message.add_reaction("✅")
 
@@ -526,7 +556,7 @@ class BotFunctions():
             else:
                 await message.reply(content=f"name ""{sn}"" is not found ")
                 return
-        self.skill_rating.init_ratings(id, sn, float(mu), float(sigma))
+        _, _ = self.skill_rating.init_ratings(id, sn, float(mu), float(sigma))
         await message.reply(content="Done")
 
     async def rename(self, message):

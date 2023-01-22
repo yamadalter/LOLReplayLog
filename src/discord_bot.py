@@ -1,4 +1,4 @@
-from discord import Client, Game
+from discord import Client, Game, Intents
 from src import bot_functions
 import os
 
@@ -7,11 +7,10 @@ EMOJI_CHECK = "✅"
 
 
 class RGCustoms(Client):
-    def __init__(self, prefix, vc_list, **options):
-        super().__init__(**options)
+    def __init__(self, prefix, **options):
+        super().__init__(intents=Intents.all(), **options)
         self.prefix = prefix
-        self.vc_list = vc_list
-        self.bot_funcs = bot_functions.BotFunctions(self.prefix, self.vc_list, self.fetch_user)
+        self.bot_funcs = bot_functions.BotFunctions(self.prefix, self.fetch_user)
 
         req_directories = ['data', 'data/match_imgs', 'data/replays', 'data/players']
         for path in req_directories:
@@ -21,7 +20,6 @@ class RGCustoms(Client):
 
     async def on_ready(self):
         print(f"Logged in as {self.user}, ID {self.user.id}")
-        self.bot_funcs.vc_list = [self.get_channel(int(vch)) for vch in self.vc_list]
         await self.change_presence(activity=Game(name=f'{self.prefix}help'))
 
     async def on_message(self, message):

@@ -10,11 +10,14 @@ from openskill import Rating, rate, create_rating, team_rating
 from typing import Union, List
 from openskill.constants import beta
 from openskill.statistics import phi_major
+from src import riot_api
 
 TEAM_NUM = 5
 MU = 1500
 SIGMA = MU / 3
 KEY = ['id', 'mu', 'sigma']
+TIER = ['IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'CHALLENGER']
+RANK = ['IV', 'III', 'II', 'I']
 
 
 class SkillRating:
@@ -118,21 +121,32 @@ class SkillRating:
         return True
 
     def init_ratings(self, id, sn, mu=1500, sigma=500):
-        if id is not None:
+        if id and sn is not None:
             if str(id) in self.ratings.keys():
                 for k, item in zip(KEY, ['reset', mu, sigma]):
                     self.ratings[str(id)][k].append(item)
+                    self.save_ratings(self.ratings)
+                    return 'you are allreay linked summoner.', mu
             else:
-                self.ratings[str(id)] = {'id': ['init'], 'mu': [mu], 'sigma': [sigma]}
-        else:
-            if sn is not None:
-                if str(sn) in self.ratings.keys():
-                    for k, item in zip(KEY, ['reset', mu, sigma]):
-                        self.ratings[str(sn)][k].append(item)
+                watcher = riot_api.RiotWatcher()
+                rank, tier = watcher.search_rank(sn)
+                if rank is not None and tier is not None:
+                    if rank == 'MASTER':
+                        mu = 2900
+                    elif rank == 'GRANDMASTER':
+                        mu = 3200
+                    elif rank == 'CHALLENGER':
+                        mu = 3500
+                    else:
+                        mu = TIER.index(tier) * 400 + RANK.index(rank) * 100 + 500
+                    sigma = 300
                 else:
-                    self.ratings[str(sn)] = {'id': ['init'], 'mu': [mu], 'sigma': [sigma]}
+                    self.ratings[str(id)] = {'id': ['init'], 'mu': [mu], 'sigma': [sigma]}
+                    return None, mu
+                self.ratings[str(id)] = {'id': ['init'], 'mu': [mu], 'sigma': [sigma]}
 
-        self.save_ratings(self.ratings)
+                self.save_ratings(self.ratings)
+                return f'your rank is {tier} {rank}  \n\u200b your rate is {mu}', mu
 
     def save_ratings(self, ratings):
         self.ratings = ratings
