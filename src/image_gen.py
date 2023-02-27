@@ -15,8 +15,8 @@ class ImageGen:
         self.current_image = None
         self.draw = None
         self.current_pixel = (0, 0)
-        self.large_font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 24)
-        self.normal_font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 16)
+        self.large_font = ImageFont.truetype("data/NotoSansJP-Thin.otf", 24)
+        self.normal_font = ImageFont.truetype("data/NotoSansJP-Thin.otf", 16)
 
     def text(self, text, font=None, fill="white", x=60, y=30, direction="right"):
         if font is None:
@@ -143,7 +143,7 @@ class ImageGen:
         plt.style.use('dark_background')
         fig = plt.figure(figsize=(12, 4))
         plt.rcParams["font.size"] = 12
-        plt.plot([0, n], [1500, 1500], '--b')
+        # plt.plot([0, n], [1500, 1500], '--b')
         plt.xticks([])
         ax = plt.subplot(111)
         upper = np.asarray(ratings, dtype='float') + np.asarray(sigmas, dtype='float')

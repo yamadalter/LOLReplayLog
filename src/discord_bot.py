@@ -44,13 +44,13 @@ class RGCustoms(Client):
                 await self.bot_funcs.send_team(reaction)
                 await reaction.message.delete()
 
-    async def on_raw_reaction_remove(self, payload):
-        author_id = payload.user_id
-        msg = await self.get_channel(payload.channel_id).fetch_message(payload.message_id)
-        if author_id == self.user.id:
-            return
-        if (payload.emoji.name == EMOJI_CHECK
-            and "カスタム参加する人は✅を押してください" in msg.content
-            and msg.author == self.user):
-            message_str = f'{msg.content} <@!{str(author_id)}>'
-            await msg.edit(content=message_str)
+    # async def on_raw_reaction_remove(self, payload):
+    #     author_id = payload.user_id
+    #     msg = await self.get_channel(payload.channel_id).fetch_message(payload.message_id)
+    #     if author_id == self.user.id:
+    #         return
+    #     if (payload.emoji.name == EMOJI_CHECK
+    #         and "カスタム参加する人は✅を押してください" in msg.content
+    #         and msg.author == self.user):
+    #         message_str = f'{msg.content} <@!{str(author_id)}>'
+    #         await msg.edit(content=message_str)

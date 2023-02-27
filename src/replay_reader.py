@@ -31,6 +31,9 @@ class ReplayReader:
         self.game_time_str = time.strftime("%M:%S", time.gmtime(self.game_time))
         self.match_id = replay_id
         self.image_gen = image_gen.ImageGen()
+        f = open('data/versions.json', 'r')
+        json_dict = json.load(f)
+        self.version = json_dict[0]
 
     def infer_map(self):  # The map is not given to us, so we must infer.
         sr_trinkets = [3340, 3364, 3363, 3513]
@@ -87,6 +90,7 @@ class ReplayReader:
                 player_dict["runes"] = [[players["PERK1"], players["PERK2"], players["PERK3"]], [players["PERK4"], players["PERK5"]]]  # smaller runes
                 player_dict["items"] = items
                 player_dict["map"] = self.map
+                player_dict['version'] = self.version
                 # player_dict["rate"] = rate[players["NAME"]]
                 player_list.append(player_dict)
         if len(player_list) == 1:

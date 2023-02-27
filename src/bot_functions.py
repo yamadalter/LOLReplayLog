@@ -1,10 +1,14 @@
-from src import image_gen, replay_reader, summoner_data, skill_rating
+from src import image_gen, replay_reader, summoner_data, skill_rating, gdrive
 from discord import File, Embed, Colour, AllowedMentions
 import os
-import pandas as pd
-import numpy as np
+import shutil
 import configparser
 import json
+import requests
+import tarfile
+import pandas as pd
+import numpy as np
+
 
 TEAM_NUM = 5
 LANE = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"]
@@ -30,10 +34,11 @@ class BotFunctions():
         config.read('config.ini')
         section = config['ROLE']
         self.linked = section['linked']
-        self.rate_1500, self.rate_2000, self.rate_2500 = section['1500'], section['2000'], section['2500']
+        self.rate_1500, self.rate_2000, self.rate_2500, self.over = section['1500'], section['2000'], section['2500'], section['over']
         self.summoner_data = summoner_data.SummonerData()
         self.image_gen = image_gen.ImageGen()
         self.skill_rating = skill_rating.SkillRating()
+        self.gdrive = gdrive.Gdrive()
         self.prefix = prefix
 
         self.user = user
@@ -44,6 +49,10 @@ class BotFunctions():
         self.commands = {"id": {"func": self.id, "help": "/id {ID} - Gets info of match ID"},
                          "replay": {"func": self.replay,
                                     "help": "/replay - Attach a .ROFL or .json from a replay for the bot to display"},
+                         "download": {"func": self.download_replay,
+                                    "help": "/download - Download a .ROFL or .json from Gdrive"},
+                         "upload": {"func": self.upload,
+                                    "help": "/upload - Upload a log to Gdrive"},
                          "log": {"func": self.log, "help": "/log - Log a replay ID into the database"},
                          "link": {"func": self.link,
                                   "help": "/link {Summoner Name} - Links a summoner name to your Discord. Mention someone before the summoner name to link it to their Discord instead"},
@@ -60,10 +69,48 @@ class BotFunctions():
                                     "help": "/revert {ID} - Revert game of match ID"},
                          "rename": {"func": self.rename,
                                     "help": "/rename {before sn},{after sn} - Rename summoner name"},
-                         "reset_rate": {"func": self.init_rate,
-                                    "help": "/reset_rate {Summoner Name or @},{rate -default 1500},{sigma --default 500} - Reset Rate"},
+                         "reset_rate": {"func": self.reset_rate,
+                                    "help": "/reset_rate {Summoner Name}, - Reset Rate"},
+                         "update": {"func": self.update,
+                                  "help": "/update - Get new version data files"},
                          "help": {"func": self.help,
                                   "help": "/help {command} - Get syntax for given command, leave blank for list of commands"}}
+
+    async def edit_role(self, message, names):
+        # change role
+        guild = message.guild
+        for name in names:
+            roleids = [self.linked]
+            rmroles = []
+            member = guild.get_member(int(name))
+            if member is not None:
+                mu = self.skill_rating.ratings[str(name)]['mu'][-1]
+                if mu <= 1500.0:
+                    roleids.append(self.rate_1500)
+                    roleids.append(self.rate_2000)
+                    roleids.append(self.rate_2500)
+                    rmroles.append(self.over)
+                elif mu <= 2000.0:
+                    roleids.append(self.rate_2000)
+                    roleids.append(self.rate_2500)
+                    rmroles.append(self.rate_1500)
+                    rmroles.append(self.over)
+                elif mu <= 2500.0:
+                    roleids.append(self.rate_2500)
+                    rmroles.append(self.rate_2000)
+                    rmroles.append(self.rate_1500)
+                    rmroles.append(self.over)
+                elif mu > 2500.0:
+                    rmroles.append(self.rate_2500)
+                    rmroles.append(self.rate_2000)
+                    rmroles.append(self.rate_1500)
+                    roleids.append(self.over)
+                for rmrole in rmroles:
+                    if not member.get_role(int(rmrole)) is None:
+                        await member.remove_roles(guild.get_role(int(rmrole)))
+                for addrole in roleids:
+                    if member.get_role(int(addrole)) is None:
+                        await member.add_roles(guild.get_role(int(addrole)))
 
     async def log(self, message=None, ids=None):
         if ids is None:
@@ -87,6 +134,13 @@ class BotFunctions():
             if message:
                 await message.reply(content=f"Match {replay_id} logged")
 
+    async def upload(self, message):  # Upload log
+        file = self.gdrive.upload_log()
+        if file is None:
+            await message.reply(content="File is not found")
+        else:
+            await message.reply(content=f"https://docs.google.com/spreadsheets/d/{file['id']}")
+
     async def id(self, message=None, ids=None):  # Get match from ID
         if ids is None:
             ids = message.content[4:].split(',')
@@ -109,9 +163,10 @@ class BotFunctions():
                     f.write(f"{replay_id}\n")
                     self.df = self.summoner_data.log(replay_id, self.df)
                     self.df.to_csv('data/log/log.csv', index=False)
-                    flag = self.skill_rating.update_ratings(replay_id, self.summoner_data.winners, self.summoner_data.losers)
-                    if flag:
+                    names = self.skill_rating.update_ratings(replay_id, self.summoner_data.winners, self.summoner_data.losers)
+                    if names is not None:
                         await self.team_result(message, self.summoner_data.winners, self.summoner_data.losers)
+                        await self.edit_role(message, names)
                     else:
                         await message.reply(content="not linked summoner found")
 
@@ -121,11 +176,11 @@ class BotFunctions():
             file = File(f'data/match_imgs/{replay_id}.png', filename="image.png")
             embed.set_image(url="attachment://image.png")
 
-            alartlist, arrestlist = self.summoner_data.ward_alert(replay_id)
-            if len(alartlist) > 0:
-                embed.add_field(name="\nBuy more control wards! (Bought control ward : 1)", value=f"{' '.join(alartlist)}", inline=False)
-            if len(arrestlist) > 0:
-                embed.add_field(name="\n**I'm arresting you! (Bought control ward : 0)**", value=f"{' '.join(arrestlist)}", inline=False)
+            # alartlist, arrestlist = self.summoner_data.ward_alert(replay_id)
+            # if len(alartlist) > 0:
+            #     embed.add_field(name="\nBuy more control wards! (Bought control ward : 1)", value=f"{' '.join(alartlist)}", inline=False)
+            # if len(arrestlist) > 0:
+            #     embed.add_field(name="\n**I'm arresting you! (Bought control ward : 0)**", value=f"{' '.join(arrestlist)}", inline=False)
 
             if message:
                 await message.reply(file=file, embed=embed)
@@ -145,40 +200,29 @@ class BotFunctions():
         else:
             await message.reply(content="No replay file attached")
 
+    async def download_replay(self, message):  # Download new replay
+        ids = []
+        filelist = self.gdrive.download_replay()
+        if len(filelist) > 0:
+            for file in filelist:
+                ids.append(file[:-5].replace('data/replays/', ''))
+        if len(ids) > 0:
+            await self.id(message, ids)
+        else:
+            await message.reply(content="File is not found")
+
     async def link(self, message):
         # link id
         summoner_name, discord_id = msg2sum(message.content, message.author.id)
         if discord_id is None:
             discord_id = message.author.id
         await message.reply(content=self.summoner_data.link_id2sum(summoner_name, str(discord_id)))
-
         # set rating
-        roleids = [self.linked]
-        if summoner_name in self.skill_rating.ratings.keys():
-            self.skill_rating.ratings[discord_id] = self.skill_rating.ratings[summoner_name]
-            del self.skill_rating.ratings[summoner_name]
-            os.remove(f'data/ratings/{summoner_name}.yaml')
-        else:
-            valid, mu = self.skill_rating.init_ratings(discord_id, summoner_name)
-            if valid is None:
-                await message.reply(content="unranked summmoner. Rate:1500")
-            else:
-                await message.reply(content=valid)
-                if mu <= 1500:
-                    roleids.append(self.rate_1500)
-                elif mu <= 2000:
-                    roleids.append(self.rate_2000)
-                elif mu <= 2500:
-                    roleids.append(self.rate_2500)
-        self.skill_rating.save_ratings(self.skill_rating.ratings)
-
-        # change nickname & role
+        await self.reset_rate(message)
+        # change nickname
         guild = message.guild
-        member = guild.get_member(discord_id)
-        roles = [guild.get_role(int(role)) for role in roleids]
-        await member.edit(nick=summoner_name)
-        for role in roles:
-            await member.add_roles(role)
+        member = guild.get_member(int(discord_id))
+        await member.edit(nick=f'{member.name} ({summoner_name})')
 
     async def unlink(self, message):
         summoner_name, discord_id = msg2sum(message.content, message.author.id)
@@ -276,8 +320,8 @@ class BotFunctions():
             file = File(f'img/champion/{famouschamp}.png', filename='champ.png')
             embed = Embed(title="Stats", description=f"**{name}**\nTotal Games {len(summoner_df)}\n", color=stats_color)
 
-            if avator is not None:
-                user_icon = avator.avatar_url
+            if (avator is not None) and (avator.avatar is not None):
+                user_icon = avator.avatar.url
             else:
                 user_icon = ""
 
@@ -366,8 +410,8 @@ class BotFunctions():
                 await message.reply(content="Log not found")
                 return
 
-            if avator is not None:
-                user_icon = avator.avatar_url
+            if avator is not None and avator.avatar is not None:
+                user_icon = avator.avatar.url
             else:
                 user_icon = ""
 
@@ -426,7 +470,7 @@ class BotFunctions():
         for vch in voice_chs:
             for member in vch.members:
                 mention_str += '<@!' + str(member.id) + '> '
-        new_message = await message.channel.send(f"カスタム参加する人は✅を押してください \n\u200b{mention_str}", allowed_mentions=allowed_mentions)
+        new_message = await message.channel.send(f"カスタム参加する人は✅を押してください \n\u200b @here {mention_str}", allowed_mentions=allowed_mentions)
         await new_message.add_reaction("✅")
 
     async def send_team(self, reaction):
@@ -439,8 +483,8 @@ class BotFunctions():
             team1 += self.team_str(str(team[0][i]))
             team2 += self.team_str(str(team[1][i]))
 
-        embed.add_field(name="Team 1", value=team1, inline=False)
-        embed.add_field(name="Team 2", value=team2, inline=False)
+        embed.add_field(name="Team 1 Blue", value=team1, inline=False)
+        embed.add_field(name="Team 2 Red", value=team2, inline=False)
 
         await reaction.message.channel.send(embed=embed)
 
@@ -532,32 +576,29 @@ class BotFunctions():
 
         await message.reply(content="Reverted")
 
-    async def init_rate(self, message):
-
-        space_split = message.content.split(' ')
-        tmp_input = " ".join(space_split[1:]).split(',')
-        name_space = tmp_input[0]
-        if len(tmp_input) == 1:
-            mu = 1500
-            sigma = 500
-        elif len(tmp_input) == 2:
-            mu = tmp_input[1]
-            sigma = 500
-        elif len(tmp_input) == 3:
-            mu = tmp_input[1]
-            sigma = tmp_input[2]
-        if name_space.startswith('<@') and name_space.endswith('>'):
-            id = name_space[2:-1]
-            sn = self.summoner_data.sum2id(id)
-        else:
-            sn = name_space
-            if sn in self.summoner_data.id2sum.keys():
-                id = self.summoner_data.id2sum.get(sn)[0]
-            else:
-                await message.reply(content=f"name ""{sn}"" is not found ")
+    async def reset_rate(self, message):
+        summoner_name, discord_id = msg2sum(message.content, message.author.id)
+        if discord_id is None:
+            discord_id = message.author.id
+        if summoner_name is None:
+            summoner_name = self.summoner_data.sum2id(str(discord_id))
+            if summoner_name is None:
+                await message.reply(content="Summoner name is not linked")
                 return
-        _, _ = self.skill_rating.init_ratings(id, sn, float(mu), float(sigma))
-        await message.reply(content="Done")
+        # set rating
+        if summoner_name in self.skill_rating.ratings.keys():
+            self.skill_rating.ratings[discord_id] = self.skill_rating.ratings[summoner_name]
+            del self.skill_rating.ratings[summoner_name]
+            os.remove(f'data/ratings/{summoner_name}.yaml')
+        else:
+            valid, mu = self.skill_rating.init_ratings(discord_id, summoner_name)
+            if valid is None:
+                await message.reply(content="unranked summmoner. Rate:1500")
+            else:
+                await message.reply(content=valid)
+        self.skill_rating.save_ratings(self.skill_rating.ratings)
+        # change role
+        await self.edit_role(message, [discord_id])
 
     async def rename(self, message):
         #  /rename Feder Kissen,Sakura Laurel
@@ -570,19 +611,44 @@ class BotFunctions():
             summoner_df = self.df[self.df["NAME"] == old_sn]
             if len(summoner_df) < 1:
                 await message.reply(content=f"summoner name {old_sn} Log not found")
-                return
-        else:
-            await message.reply(content="Log not found")
-            return
-        self.df = self.df.replace(old_sn, sn)
-        self.df.to_csv('data/log/log.csv', index=False)
-        await message.reply(content="Rename Successfully Log data")
+            else:
+                self.df = self.df.replace(old_sn, sn)
+                self.df.to_csv('data/log/log.csv', index=False)
+                await message.reply(content="Rename Successfully Log data")
+
         # rename discord id
         if old_sn in self.summoner_data.id2sum.keys():
             self.summoner_data.id2sum[sn] = self.summoner_data.id2sum.pop(old_sn)
             self.summoner_data.save_id2sum()
+            await message.reply(content="Relink Successfully discord id")
         else:
             await message.reply(content=f"{old_sn} not linked")
-            return
-        await message.reply(content="Rename Successfully discord id")
         return
+
+    async def update(self, message):
+        #  download versions.json
+        url = 'https://ddragon.leagueoflegends.com/api/versions.json'
+        filename = 'data/versions.json'
+        urlData = requests.get(url).content
+        with open(filename, mode='wb') as f:
+            f.write(urlData)
+        
+        f = open(filename, 'r')
+        json_dict = json.load(f)
+        version = json_dict[0]
+
+        #  download Data Dragon
+        url = f'https://ddragon.leagueoflegends.com/cdn/dragontail-{version}.tgz'
+        filename = 'dragontail.tgz'
+        urlData = requests.get(url).content
+        with open(filename, mode='wb') as f:
+            f.write(urlData)
+        
+        with tarfile.open(filename, 'r:gz') as tar:
+            tar.extractall(path='dragontail')
+        if os.path.isdir('img'):
+            shutil.rmtree('img')
+        shutil.move(f'dragontail/{version}/img', './')
+        shutil.move('dragontail/img/perk-images', 'img/perk-images')
+        shutil.move(f'dragontail/{version}/data/en_US/runesReforged.json', 'data/runesReforged.json')
+        await message.reply(content=f"updated version {version}")
