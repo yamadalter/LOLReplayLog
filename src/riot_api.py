@@ -12,6 +12,9 @@ class RiotWatcher:
         apitoken = config['CONFIG']['riotapi']
         self.watcher = LolWatcher(apitoken)
 
+    def search_name(self, name):
+        return self.watcher.summoner.by_name(REGION, name)['name']
+
     def search_rank(self, name):
         id = self.watcher.summoner.by_name(REGION, name)['id']
         rankdatas = self.watcher.league.by_summoner(REGION, id)

@@ -1,4 +1,4 @@
-from src import image_gen, replay_reader, summoner_data, skill_rating, gdrive
+from src import image_gen, replay_reader, summoner_data, skill_rating, gdrive, riot_api
 from discord import File, Embed, Colour, AllowedMentions
 import os
 import shutil
@@ -216,9 +216,13 @@ class BotFunctions():
         summoner_name, discord_id = msg2sum(message.content, message.author.id)
         if discord_id is None:
             discord_id = message.author.id
-        await message.reply(content=self.summoner_data.link_id2sum(summoner_name, str(discord_id)))
+        watcher = riot_api.RiotWatcher()
+        summoner_name = watcher.search_name(summoner_name)
+        result, content = self.summoner_data.link_id2sum(summoner_name, str(discord_id))
+        await message.reply(content=content)
         # set rating
-        await self.reset_rate(message)
+        if result:
+            await self.reset_rate(message)
         # change nickname
         guild = message.guild
         member = guild.get_member(int(discord_id))
@@ -470,7 +474,7 @@ class BotFunctions():
         for vch in voice_chs:
             for member in vch.members:
                 mention_str += '<@!' + str(member.id) + '> '
-        new_message = await message.channel.send(f"カスタム参加する人は✅を押してください \n\u200b @here {mention_str}", allowed_mentions=allowed_mentions)
+        new_message = await message.channel.send(f"カスタム参加する人は✅を押してください \n\u200b {mention_str}", allowed_mentions=allowed_mentions)
         await new_message.add_reaction("✅")
 
     async def send_team(self, reaction):

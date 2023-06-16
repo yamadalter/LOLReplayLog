@@ -111,9 +111,13 @@ class SkillRating:
             return None
         [t1, t2] = rate([t1, t2])
         for t, name in zip(t1, t1_name):
+            if t.sigma < 300:
+                t.sigma = 300
             for k, item in zip(KEY, [id, t.mu, t.sigma]):
                 self.ratings[str(name)][k].append(item)
         for t, name in zip(t2, t2_name):
+            if t.sigma < 300:
+                t.sigma = 300
             for k, item in zip(KEY, [id, t.mu, t.sigma]):
                 self.ratings[str(name)][k].append(item)
 
@@ -133,7 +137,7 @@ class SkillRating:
                     mu = 3500
                 else:
                     mu = TIER.index(tier) * 400 + RANK.index(rank) * 100 + 500
-                sigma = 300
+                sigma = 400
             else:
                 if str(id) in self.ratings.keys():
                     for k, item in zip(KEY, ['reset', 1500, 500]):

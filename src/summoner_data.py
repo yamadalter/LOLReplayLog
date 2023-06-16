@@ -29,14 +29,14 @@ class SummonerData:
             for taken_id in self.id2sum[summoner_names]:
                 taken_ids.append(taken_id)
         if discord_id in ids:
-            return "Summoner already linked"
+            return False, "Summoner already linked"
         elif discord_id in taken_ids:
-            return "Someone else already has this summoner name"
+            return False, "Someone else already has this summoner name"
         else:
             ids.append(discord_id)
             self.id2sum[summoner_name] = ids
             self.save_id2sum()
-            return "Summoner successfully linked"
+            return True, "Summoner successfully linked"
 
     def unlink(self, summoner_name, discord_id):
         if summoner_name is None:
