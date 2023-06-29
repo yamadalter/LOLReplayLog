@@ -1,6 +1,5 @@
 from src import image_gen, replay_reader, summoner_data, skill_rating, gdrive, riot_api
 from discord import File, Embed, Colour, AllowedMentions, ui, ButtonStyle
-from django.http import StreamingHttpResponse
 import os
 import shutil
 import configparser
