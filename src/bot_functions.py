@@ -1,5 +1,6 @@
 from src import image_gen, replay_reader, summoner_data, skill_rating, gdrive, riot_api
-from discord import File, Embed, Colour, AllowedMentions
+from discord import File, Embed, Colour, AllowedMentions, ui, ButtonStyle
+from django.http import StreamingHttpResponse
 import os
 import shutil
 import configparser
@@ -480,17 +481,27 @@ class BotFunctions():
     async def send_team(self, reaction):
 
         team = await self.skill_rating.make_team(reaction)
-        embed = Embed(title="Team", color=0xF945C0)
         team1 = ''
         team2 = ''
         for i in range(TEAM_NUM):
             team1 += self.team_str(str(team[0][i]))
             team2 += self.team_str(str(team[1][i]))
+        name1 = ','.join([self.summoner_data.sum2id(str(team[0][i])).replace(' ', '%20') for i in range(TEAM_NUM)])
+        button = ui.Button(label="OPGG", style=ButtonStyle.primary, url=f'https://www.op.gg/multisearch/jp?summoners={name1}')
+        view = ui.View()
+        view.add_item(button)
+        embed = Embed(title="Team 1", color=0x0000ff)
+        embed.add_field(name="Blue", value=team1, inline=False)
+        await reaction.message.channel.send(embed=embed, view=view)
 
-        embed.add_field(name="Team 1 Blue", value=team1, inline=False)
-        embed.add_field(name="Team 2 Red", value=team2, inline=False)
-
-        await reaction.message.channel.send(embed=embed)
+        embed = Embed(title="Team 2", color=0xff0000)
+        embed.add_field(name="Red", value=team2, inline=False)
+        name2 = ','.join([self.summoner_data.sum2id(str(team[1][i])).replace(' ', '%20') for i in range(TEAM_NUM)])
+        print(name2)
+        button = ui.Button(label="OPGG", style=ButtonStyle.primary, url=f'https://www.op.gg/multisearch/jp?summoners={name2}')
+        view = ui.View()
+        view.add_item(button)
+        await reaction.message.channel.send(embed=embed, view=view)
 
     def team_str(self, id):
         name = self.summoner_data.sum2id(str(id))
@@ -644,9 +655,10 @@ class BotFunctions():
         #  download Data Dragon
         url = f'https://ddragon.leagueoflegends.com/cdn/dragontail-{version}.tgz'
         filename = 'dragontail.tgz'
-        urlData = requests.get(url).content
-        with open(filename, mode='wb') as f:
-            f.write(urlData)
+        with requests.get(url, stream=True) as r:
+            with open(filename, mode='wb') as f:
+                for chunk in r.iter_content(chunk_size=8096 * 1024):
+                    f.write(chunk)
         
         with tarfile.open(filename, 'r:gz') as tar:
             tar.extractall(path='dragontail')
