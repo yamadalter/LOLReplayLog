@@ -7,7 +7,7 @@ import json
 class ImageGen:
     def __init__(self):
         try:
-            with open("data/runesReforged.json", "r") as f:
+            with open("data/runesReforged.json", "r", encoding="utf-8") as f:
                 self.rune_data = json.load(f)
         except FileNotFoundError:
             print("data/runesReforged.json not found. Download it from Riot's datadragon and restart.")
@@ -15,8 +15,8 @@ class ImageGen:
         self.current_image = None
         self.draw = None
         self.current_pixel = (0, 0)
-        self.large_font = ImageFont.truetype("/usr/share/fonts/google-noto/NotoSansJP-Thin.otf", 24)
-        self.normal_font = ImageFont.truetype("/usr/share/fonts/google-noto/NotoSansJP-Thin.otf", 16)
+        self.large_font = ImageFont.truetype("data/NotoSansJP-Thin.otf", 24)
+        self.normal_font = ImageFont.truetype("data/NotoSansJP-Thin.otf", 16)
 
     def text(self, text, font=None, fill="white", x=60, y=30, direction="right"):
         if font is None:
@@ -137,13 +137,12 @@ class ImageGen:
         self.current_image.save("temp.png")
 
     def generate_rating_img(self, ratings, sigmas, name):
-
         x = range(len(ratings))
         n = len(ratings) - 1
         plt.style.use('dark_background')
         fig = plt.figure(figsize=(12, 4))
         plt.rcParams["font.size"] = 12
-        plt.plot([0, n], [1500, 1500], '--b')
+        # plt.plot([0, n], [1500, 1500], '--b')
         plt.xticks([])
         ax = plt.subplot(111)
         upper = np.asarray(ratings, dtype='float') + np.asarray(sigmas, dtype='float')

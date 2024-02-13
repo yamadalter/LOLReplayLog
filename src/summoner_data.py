@@ -1,7 +1,9 @@
 import yaml
 import os
-from src import replay_reader
+from src import replay_reader, skill_rating
 import pandas as pd
+
+SummonerDataCSV = 'data/summoner_data.csv'
 
 
 def simplify(num):
@@ -15,37 +17,9 @@ class SummonerData:
     def __init__(self):
         self.winners = []
         self.losers = []
-        if os.path.exists("data/id_to_summoner.yaml"):
-            with open("data/id_to_summoner.yaml", "r", encoding="utf-8") as f:
-                self.id2sum = yaml.load(f, Loader=yaml.FullLoader)
-        else:
-            with open("data/id_to_summoner.yaml", "w", encoding="utf-8") as f:
-                self.id2sum = {'test': '0'}
-
-    def link_id2sum(self, summoner_name, discord_id):
-        ids = self.id2sum.get(summoner_name, [])
-        taken_ids = []
-        for summoner_names in self.id2sum:
-            for taken_id in self.id2sum[summoner_names]:
-                taken_ids.append(taken_id)
-        if discord_id in ids:
-            return "Summoner already linked"
-        elif discord_id in taken_ids:
-            return "Someone else already has this summoner name"
-        else:
-            ids.append(discord_id)
-            self.id2sum[summoner_name] = ids
-            self.save_id2sum()
-            return "Summoner successfully linked"
-
-    def unlink(self, summoner_name, discord_id):
-        if summoner_name is None:
-            summoner_name = self.sum2id(discord_id)
-        if summoner_name not in self.id2sum.keys():
-            return "Summoner was not linked"
-        del self.id2sum[summoner_name]
-        self.save_id2sum()
-        return "Summoner unlinked"
+        self.skill_rating = skill_rating.SkillRating()
+        if os.path.exists(SummonerDataCSV):
+            self.summoner_data = pd.read_csv(SummonerDataCSV)
 
     def log(self, replay_id, old_df):  # Summoner name (file) -> map (1 of 2 lists) -> [Champion, game result, KDA]
         replay = replay_reader.ReplayReader(replay_id)
@@ -121,10 +95,6 @@ class SummonerData:
             champ_data_list.append(avg_champ_data)
         return champ_data_list
 
-    def save_id2sum(self): 
-        with open("data/id_to_summoner.yaml", "w", encoding="utf-8") as f:
-            yaml.dump(self.id2sum, f, allow_unicode=True, encoding='utf-8')
-
     def ward_alert(self, replay_id): 
         replay = replay_reader.ReplayReader(replay_id)
         pstats = replay.get_player_stats()
@@ -143,13 +113,3 @@ class SummonerData:
                 arrest_list.append(name)
 
         return alert_list, arrest_list
-
-    def sum2id(self, discord_id):
-        list_of_key = list(self.id2sum.keys())
-        multi_list = list(self.id2sum.values())
-        list_of_value = [x[0] for x in multi_list]
-        if str(discord_id) in list_of_value:
-            position = list_of_value.index(discord_id)
-            return list_of_key[position]
-        else:
-            return None

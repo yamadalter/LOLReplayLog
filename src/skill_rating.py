@@ -1,49 +1,48 @@
-import yaml
-import os
-import glob
 import random
 import itertools
 import math
 import numpy as np
-from src import summoner_data
+import pandas as pd
 from openskill import Rating, rate, create_rating, team_rating
 from typing import Union, List
 from openskill.constants import beta
 from openskill.statistics import phi_major
 
-TEAM_NUM = 5
+TEAM_NUM = 1
 MU = 1500
 SIGMA = MU / 3
-KEY = ['id', 'mu', 'sigma']
+INIT_SIGMA = 400
+MIN_SIGMA = 250
+SHUFFLE_NUM = 1000
 
 
 class SkillRating:
     def __init__(self):
         self.ratings = {}
-        for path in glob.glob('data/ratings/*.yaml'):
-            name = os.path.splitext(os.path.basename(path))[0]
-            with open(path, "r", encoding="utf-8") as f:
-                self.ratings[name] = yaml.load(f, Loader=yaml.FullLoader)
+        self.tierdf = pd.read_csv('data/tier.csv', index_col='Rank')
 
-    async def make_team(self, reaction):
+    async def make_team(self, df, reaction):
         players = []
         async for user in reaction.users():
             if not user == reaction.message.author:
-                if str(user.id) not in self.ratings.keys():
-                    self.ratings[str(user.id)] = {'id': ['init'], 'mu': [MU], 'sigma': [SIGMA]}
-                    self.save_ratings(self.ratings)
+                if user.id not in df.index:
+                    return False, str(user.id)
                 players.append(user.id)
         minp = 1
         team = []
-        for _ in range(252):
+        for _ in range(SHUFFLE_NUM):
             t1 = []
             t2 = []
             random.shuffle(players)
             t1_name = players[:TEAM_NUM]
             t2_name = players[TEAM_NUM:]
             for j in range(TEAM_NUM):
-                t1.append(create_rating([self.ratings[str(t1_name[j])][k][-1] for k in KEY[1:]]))
-                t2.append(create_rating([self.ratings[str(t2_name[j])][k][-1] for k in KEY[1:]]))
+                mu = df.loc[t1_name[j], 'mu'][-1]
+                sigma = df.loc[t1_name[j], 'sigma'][-1]
+                t1.append(create_rating([mu, sigma]))
+                mu = df.loc[t2_name[j], 'mu'][-1]
+                sigma = df.loc[t2_name[j], 'sigma'][-1]
+                t2.append(create_rating([mu, sigma]))
             predictions = self.predict_win(teams=[t1, t2])
 
             if np.abs(predictions[0] - predictions[1]) < minp:
@@ -53,8 +52,7 @@ class SkillRating:
                 team = [t1_name, t2_name]
                 break
 
-        self.save_ratings(self.ratings)
-        return team
+        return True, team
 
     def predict_win(self, teams: List[List[Rating]], **options) -> List[Union[int, float]]:
         if len(teams) < 2:
@@ -84,58 +82,39 @@ class SkillRating:
             )
         ]
 
-    def get_player(self, team):
-        Summoner_data = summoner_data.SummonerData()
+    def get_player(self, df, team):
         t = []
         t_name = []
         for p in team:
-            id = Summoner_data.id2sum.get(p, None)
-            if id is not None:
+            id = df[df['sn'] == p].index
+            if len(id) > 0:
                 name = id[0]
             else:
                 return None, p
-            t.append(create_rating([self.ratings[str(name)][k][-1] for k in KEY[1:]]))
+            mu = df.loc[name, 'mu'][-1]
+            sigma = df.loc[name, 'sigma'][-1]
+            t.append(create_rating([mu, sigma]))
             t_name.append(name)
         return t, t_name
 
-    def update_ratings(self, id, winners, losers):
+    def update_ratings(self, df, id, winners, losers):
         if len(winners) < TEAM_NUM or len(losers) < TEAM_NUM:
-            return False
-
-        t1, t1_name = self.get_player(winners)
-        t2, t2_name = self.get_player(losers)
+            return None
+        t1, t1_name = self.get_player(df, winners)
+        t2, t2_name = self.get_player(df, losers)
         if t1 is None or t2 is None:
-            return False
+            return df, None
         [t1, t2] = rate([t1, t2])
         for t, name in zip(t1, t1_name):
-            for k, item in zip(KEY, [id, t.mu, t.sigma]):
-                self.ratings[str(name)][k].append(item)
+            if t.sigma < MIN_SIGMA:
+                t.sigma = MIN_SIGMA
+                df.loc[name]['mu'].append(t.mu)
+                df.loc[name]['sigma'].append(t.sigma)
+                df.loc[name]['gameid'].append(id)
         for t, name in zip(t2, t2_name):
-            for k, item in zip(KEY, [id, t.mu, t.sigma]):
-                self.ratings[str(name)][k].append(item)
-
-        self.save_ratings(self.ratings)
-        return True
-
-    def init_ratings(self, id, sn, mu=1500, sigma=500):
-        if id is not None:
-            if str(id) in self.ratings.keys():
-                for k, item in zip(KEY, ['reset', mu, sigma]):
-                    self.ratings[str(id)][k].append(item)
-            else:
-                self.ratings[str(id)] = {'id': ['init'], 'mu': [mu], 'sigma': [sigma]}
-        else:
-            if sn is not None:
-                if str(sn) in self.ratings.keys():
-                    for k, item in zip(KEY, ['reset', mu, sigma]):
-                        self.ratings[str(sn)][k].append(item)
-                else:
-                    self.ratings[str(sn)] = {'id': ['init'], 'mu': [mu], 'sigma': [sigma]}
-
-        self.save_ratings(self.ratings)
-
-    def save_ratings(self, ratings):
-        self.ratings = ratings
-        for k in self.ratings.keys():
-            with open(f"data/ratings/{k}.yaml", "w", encoding="utf-8") as f:
-                yaml.dump(self.ratings[k], f, allow_unicode=True, encoding='utf-8')
+            if t.sigma < MIN_SIGMA:
+                t.sigma = MIN_SIGMA
+                df.loc[name]['mu'].append(t.mu)
+                df.loc[name]['sigma'].append(t.sigma)
+                df.loc[name]['gameid'].append(id)
+        return df, t1_name + t2_name
