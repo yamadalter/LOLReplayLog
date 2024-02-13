@@ -1,6 +1,5 @@
 from src import discord_bot
 import configparser
-import json
 
 config = configparser.ConfigParser()
 config.read('config.ini')

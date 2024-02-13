@@ -137,7 +137,6 @@ class ImageGen:
         self.current_image.save("temp.png")
 
     def generate_rating_img(self, ratings, sigmas, name):
-
         x = range(len(ratings))
         n = len(ratings) - 1
         plt.style.use('dark_background')

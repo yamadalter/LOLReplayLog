@@ -2,7 +2,7 @@ from discord import Client, Game, Intents
 from src import bot_functions
 import os
 
-TEAM_NUM = 5
+TEAM_NUM = 1
 EMOJI_CHECK = "✅"
 
 
@@ -39,7 +39,6 @@ class RGCustoms(Client):
 
             remove_str = f'<@!{str(author.id)}>'
             await reaction.message.edit(content=reaction.message.content.replace(remove_str, ''))
-
             if reaction.count == TEAM_NUM * 2 + 1:
                 await self.bot_funcs.send_team(reaction)
                 await reaction.message.delete()
