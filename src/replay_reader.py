@@ -1,7 +1,7 @@
 import json
 import os
 import time
-from src import image_gen
+import image_gen
 
 
 class ReplayReader:

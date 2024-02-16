@@ -9,7 +9,7 @@ class Watcher:
     def __init__(self):
         super().__init__()
         config = configparser.ConfigParser()
-        config.read('config.ini')
+        config.read('src/config.ini')
         apitoken = config['CONFIG']['riotapi']
         self.watcher = LolWatcher(apitoken)
         self.riotwatcher = RiotWatcher(apitoken)

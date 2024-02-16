@@ -1,6 +1,7 @@
 import yaml
 import os
-from src import replay_reader, skill_rating
+import replay_reader
+import skill_rating
 import pandas as pd
 
 SummonerDataCSV = 'data/summoner_data.csv'

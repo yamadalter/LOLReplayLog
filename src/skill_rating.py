@@ -8,7 +8,7 @@ from typing import Union, List
 from openskill.constants import beta
 from openskill.statistics import phi_major
 
-TEAM_NUM = 1
+TEAM_NUM = 5
 MU = 1500
 SIGMA = MU / 3
 INIT_SIGMA = 400
