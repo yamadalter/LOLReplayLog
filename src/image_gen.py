@@ -70,7 +70,7 @@ class ImageGen:
         self.resize_paste(self.get_rune_img(player["KEYSTONE_ID"], 0), (40, 40), space=2)
         self.resize_paste(self.get_style_img(player["PERK_SUB_STYLE"]), (20, 20), center="y")
         self.resize_paste(self.get_champ_icon(player["SKIN"]), (40, 40))
-        self.text(text=player["NAME"], x=150)
+        self.text(text=f'{player["gamename"]} #{player["tag"]}', x=150)
         self.text(text=player["kda"], x=75)
         self.current_pixel = (self.current_pixel[0], self.current_pixel[1] + 5)
         for item in player["items"]:

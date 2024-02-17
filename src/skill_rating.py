@@ -108,13 +108,13 @@ class SkillRating:
         for t, name in zip(t1, t1_name):
             if t.sigma < MIN_SIGMA:
                 t.sigma = MIN_SIGMA
-                df.loc[name]['mu'].append(t.mu)
-                df.loc[name]['sigma'].append(t.sigma)
-                df.loc[name]['gameid'].append(id)
+            df.loc[name]['mu'].append(t.mu)
+            df.loc[name]['sigma'].append(t.sigma)
+            df.loc[name]['gameid'].append(id)
         for t, name in zip(t2, t2_name):
             if t.sigma < MIN_SIGMA:
                 t.sigma = MIN_SIGMA
-                df.loc[name]['mu'].append(t.mu)
-                df.loc[name]['sigma'].append(t.sigma)
-                df.loc[name]['gameid'].append(id)
+            df.loc[name]['mu'].append(t.mu)
+            df.loc[name]['sigma'].append(t.sigma)
+            df.loc[name]['gameid'].append(id)
         return df, t1_name + t2_name

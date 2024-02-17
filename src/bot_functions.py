@@ -33,9 +33,18 @@ def _df2list(df):
     sigmalist = []
     gameidlist = []
     for _, row in df.iterrows():
-        mulist.append(eval(row['mu']))
-        sigmalist.append(eval(row['sigma']))
-        gameidlist.append(eval(row['gameid']))
+        if type(row['mu']) is str:
+            mulist.append(eval(row['mu']))
+        else:
+            mulist.append(row['mu'])
+        if type(row['sigma']) is str:
+            sigmalist.append(eval(row['sigma']))
+        else:
+            sigmalist.append(row['sigma'])
+        if type(row['gameid']) is str:
+            gameidlist.append(eval(row['gameid']))
+        else:
+            gameidlist.append(row['gameid'])
     df.loc[:, 'mu'] = mulist
     df.loc[:, 'sigma'] = sigmalist
     df.loc[:, 'gameid'] = gameidlist
@@ -83,6 +92,7 @@ class BotFunctions():
                 self.logdf = self.summoner_data.log(replay_id, self.logdf)
                 self.df, names = self.skill_rating.update_ratings(self.df, replay_id, self.summoner_data.winners, self.summoner_data.losers)
                 if names is not None:
+                    self.save_df2csv()
                     await self.team_result(interaction, self.summoner_data.winners, self.summoner_data.losers)
                 else:
                     await interaction.followup.send(content="not linked summoner found")
@@ -92,7 +102,7 @@ class BotFunctions():
                     f.write(f"{replay_id}\n")
                 self.logdf.to_csv('data/log/log.csv', index=False)
             if not os.path.exists(f'data/match_imgs/{replay_id}.png'):
-                replay.generate_game_img()
+                replay.generate_game_img(self.df)
             embed = Embed(title="Replay", description=f"{replay_id}", color=Colour.blurple())
             file = File(f'data/match_imgs/{replay_id}.png', filename="image.png")
             embed.set_image(url="attachment://image.png")
@@ -116,8 +126,8 @@ class BotFunctions():
             discord_id = interaction.user.id
         else:
             discord_id = member.id
-        if discord_id not in self.df.index:
-            await interaction.followup.send(content='<@{discord_id}> is already linked')
+        if discord_id in self.df.index:
+            await interaction.followup.send(content=f'<@{discord_id}> is already linked')
             return
         if (riotid is None) or (tag is None):
             await interaction.followup.send(content='/link gamename #tag')
@@ -386,7 +396,9 @@ class BotFunctions():
         for sn in team:
             if sn in self.df['sn'].values:
                 id = _search_df_index(self.df, 'sn', sn)
-                team_str += f'<@{id}> ({sn}) \n\u200b'
+                gamename = self.df.loc[id, 'gamename']
+                tag = self.df.loc[id, 'tag']
+                team_str += f'<@{id}> ({gamename} #{tag}) \n\u200b'
             else:
                 id = sn
                 team_str += f'not linked summoner ({sn}) \n\u200b'
@@ -401,7 +413,7 @@ class BotFunctions():
             rate = int(self.df.loc[id, 'mu'][-1])
             if diff > 0:
                 diff = '+' + str(diff)
-            stats = f'Win:{win} Lose:{lose} {winrate:.3g}% Rate:{rate} ({diff})'
+            stats = f'Win:{win} Lose:{lose} {winrate:.3g}% Rate:{int(rate)} ({diff})'
             team_str += f'{stats} \n\u200b'
         return team_str
 
@@ -469,7 +481,7 @@ class BotFunctions():
                 await interaction.followup.send(content=f'{gamename} Rate:{mu}')
             else:
                 mu, sigma = MU, SIGMA
-                await interaction.followup.send(content=f'unranked summmoner. Rate:1500')
+                await interaction.followup.send(content=f'unranked summmoner. Rate:{MU}')
             self.df.loc[discord_id]['mu'].append(mu)
             self.df.loc[discord_id]['sigma'].append(sigma)
             self.df.loc[discord_id]['gameid'].append('reset')
@@ -538,3 +550,4 @@ class BotFunctions():
 
     def save_df2csv(self):
         self.df.to_csv(LinkDataCSV)
+        self.df = _df2list(self.df)

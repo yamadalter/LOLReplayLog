@@ -35,7 +35,7 @@ async def on_ready():
     print(f"Logged in as {client.user}, ID {client.user.id}")
 
     # アクティビティを設定
-    await client.change_presence(activity=Game(name=f'{prefix}help'))
+    await client.change_presence(activity=Game(name='produced by:yamadalter'))
 
     # スラッシュコマンドを同期
     await tree.sync()
@@ -59,7 +59,7 @@ async def rename(interaction: Interaction, riotid: str, tag: str, member: discor
 
 
 @tree.command(name='set_rate', description='レートを任意の値に変更します')
-async def set_rate(interaction: Interaction, rate: str, sigma: str = 400, member: discord.Member = None):
+async def set_rate(interaction: Interaction, rate: int, sigma: int = 400, member: discord.Member = None):
     await bot_funcs.set_rate(interaction, rate, sigma, member)
 
 
