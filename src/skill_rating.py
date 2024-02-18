@@ -3,6 +3,7 @@ import itertools
 import math
 import numpy as np
 import pandas as pd
+from utils import get_keys
 from openskill import Rating, rate, create_rating, team_rating
 from typing import Union, List
 from openskill.constants import beta
@@ -21,13 +22,13 @@ class SkillRating:
         self.ratings = {}
         self.tierdf = pd.read_csv('data/tier.csv', index_col='Rank')
 
-    async def make_team(self, df, reaction):
+    async def make_team(self, d, reaction):
         players = []
         async for user in reaction.users():
             if not user == reaction.message.author:
-                if user.id not in df.index:
+                if str(user.id) not in d:
                     return False, str(user.id)
-                players.append(user.id)
+                players.append(str(user.id))
         minp = 1
         team = []
         for _ in range(SHUFFLE_NUM):
@@ -37,11 +38,11 @@ class SkillRating:
             t1_name = players[:TEAM_NUM]
             t2_name = players[TEAM_NUM:]
             for j in range(TEAM_NUM):
-                mu = df.loc[t1_name[j], 'mu'][-1]
-                sigma = df.loc[t1_name[j], 'sigma'][-1]
+                mu = d[t1_name[j]]['mu'][-1]
+                sigma = d[t1_name[j]]['sigma'][-1]
                 t1.append(create_rating([mu, sigma]))
-                mu = df.loc[t2_name[j], 'mu'][-1]
-                sigma = df.loc[t2_name[j], 'sigma'][-1]
+                mu = d[t2_name[j]]['mu'][-1]
+                sigma = d[t2_name[j]]['sigma'][-1]
                 t2.append(create_rating([mu, sigma]))
             predictions = self.predict_win(teams=[t1, t2])
 
@@ -82,39 +83,39 @@ class SkillRating:
             )
         ]
 
-    def get_player(self, df, team):
+    def get_player(self, d, team):
         t = []
         t_name = []
         for p in team:
-            id = df[df['sn'] == p].index
-            if len(id) > 0:
-                name = id[0]
+            id = get_keys(d, 'sn', p)
+            if id is not None:
+                name = id
             else:
                 return None, p
-            mu = df.loc[name, 'mu'][-1]
-            sigma = df.loc[name, 'sigma'][-1]
+            mu = d[name]['mu'][-1]
+            sigma = d[name]['sigma'][-1]
             t.append(create_rating([mu, sigma]))
             t_name.append(name)
         return t, t_name
 
-    def update_ratings(self, df, id, winners, losers):
+    def update_ratings(self, d, id, winners, losers):
         if len(winners) < TEAM_NUM or len(losers) < TEAM_NUM:
             return None
-        t1, t1_name = self.get_player(df, winners)
-        t2, t2_name = self.get_player(df, losers)
+        t1, t1_name = self.get_player(d, winners)
+        t2, t2_name = self.get_player(d, losers)
         if t1 is None or t2 is None:
-            return df, None
+            return d, None
         [t1, t2] = rate([t1, t2])
         for t, name in zip(t1, t1_name):
             if t.sigma < MIN_SIGMA:
                 t.sigma = MIN_SIGMA
-            df.loc[name]['mu'].append(t.mu)
-            df.loc[name]['sigma'].append(t.sigma)
-            df.loc[name]['gameid'].append(id)
+            d[name]['mu'].append(t.mu)
+            d[name]['sigma'].append(t.sigma)
+            d[name]['gameid'].append(id)
         for t, name in zip(t2, t2_name):
             if t.sigma < MIN_SIGMA:
                 t.sigma = MIN_SIGMA
-            df.loc[name]['mu'].append(t.mu)
-            df.loc[name]['sigma'].append(t.sigma)
-            df.loc[name]['gameid'].append(id)
-        return df, t1_name + t2_name
+            d[name]['mu'].append(t.mu)
+            d[name]['sigma'].append(t.sigma)
+            d[name]['gameid'].append(id)
+        return d, t1_name + t2_name

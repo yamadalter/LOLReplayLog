@@ -2,6 +2,7 @@ import json
 import os
 import time
 import image_gen
+from utils import get_keys
 
 
 class ReplayReader:
@@ -110,7 +111,7 @@ class ReplayReader:
             kda[2] += int(player_stats["ASSISTS"])
         return f"{winner_kda[0]}/{winner_kda[1]}/{winner_kda[2]}", f"{loser_kda[0]}/{loser_kda[1]}/{loser_kda[2]}"
 
-    def generate_game_img(self, df):
+    def generate_game_img(self, d):
         winners = []  # [KEYSTONE_ID, PERK_SUB_STYLE, champ, name, KDA, [items]]
         losers = []
         for player in self.get_player_stats():
@@ -118,9 +119,9 @@ class ReplayReader:
                 list_to_mod = losers
             elif player["result"] == "Win":
                 list_to_mod = winners
-            id = df[df['sn'] == player["NAME"]].index[0]
-            player['gamename'] = df.loc[id, 'gamename']
-            player['tag'] = df.loc[id, 'tag']
+            id = get_keys(d, 'sn', player["NAME"])
+            player['gamename'] = d[id]['gamename']
+            player['tag'] = d[id]['tag']
             list_to_mod.append(player)
         win_kda, lose_kda = self.get_team_kdas()
         self.image_gen.generate_game_img([[win_kda, lose_kda], winners, losers, self.map, self.game_time_str], self.match_id)
