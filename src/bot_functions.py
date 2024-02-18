@@ -4,6 +4,7 @@ import summoner_data
 import skill_rating
 import riot_api
 from discord import File, Embed, Colour, ui, ButtonStyle
+from utils import get_keys
 import os
 import shutil
 import configparser
@@ -20,35 +21,7 @@ SIGMA = MU / 3
 INIT_SIGMA = 400
 MIN_SIGMA = 250
 LANE = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"]
-LinkDataCSV = 'data/linkdata.csv'
-# KEY = ['id', 'mu', 'sigma']
-
-
-def _search_df_index(df, column, value):
-    return df[df[column] == value].index[0]
-
-
-def _df2list(df):
-    mulist = []
-    sigmalist = []
-    gameidlist = []
-    for _, row in df.iterrows():
-        if type(row['mu']) is str:
-            mulist.append(eval(row['mu']))
-        else:
-            mulist.append(row['mu'])
-        if type(row['sigma']) is str:
-            sigmalist.append(eval(row['sigma']))
-        else:
-            sigmalist.append(row['sigma'])
-        if type(row['gameid']) is str:
-            gameidlist.append(eval(row['gameid']))
-        else:
-            gameidlist.append(row['gameid'])
-    df.loc[:, 'mu'] = mulist
-    df.loc[:, 'sigma'] = sigmalist
-    df.loc[:, 'gameid'] = gameidlist
-    return df
+LinkDataJSON = 'data/linkdata.json'
 
 
 class BotFunctions():
@@ -57,11 +30,11 @@ class BotFunctions():
         config = configparser.ConfigParser()
         config.read('config.ini')
         self.tierdf = pd.read_csv('data/tier.csv', index_col='Rank')
-        if os.path.exists(LinkDataCSV):
-            self.df = pd.read_csv(LinkDataCSV, index_col='DiscordID')
-            self.df = _df2list(self.df)
+        if os.path.exists(LinkDataJSON):
+            json_open = open(LinkDataJSON, 'r', encoding='utf-8')
+            self.dic = json.load(json_open)
         else:
-            self.df = pd.DataFrame([], columns=['DiscordID','puuid','gamename','tag','sn','mu','sigma','gameid'])
+            self.dic = {}
         self.summoner_data = summoner_data.SummonerData()
         self.image_gen = image_gen.ImageGen()
         self.skill_rating = skill_rating.SkillRating()
@@ -90,9 +63,9 @@ class BotFunctions():
             if not replay_id + '\n' in logged_ids:
                 old_log = self.logdf
                 self.logdf = self.summoner_data.log(replay_id, self.logdf)
-                self.df, names = self.skill_rating.update_ratings(self.df, replay_id, self.summoner_data.winners, self.summoner_data.losers)
+                self.dic, names = self.skill_rating.update_ratings(self.dic, replay_id, self.summoner_data.winners, self.summoner_data.losers)
                 if names is not None:
-                    self.save_df2csv()
+                    self.save_dic2json()
                     await self.team_result(interaction, self.summoner_data.winners, self.summoner_data.losers)
                 else:
                     await interaction.followup.send(content="not linked summoner found")
@@ -102,7 +75,7 @@ class BotFunctions():
                     f.write(f"{replay_id}\n")
                 self.logdf.to_csv('data/log/log.csv', index=False)
             if not os.path.exists(f'data/match_imgs/{replay_id}.png'):
-                replay.generate_game_img(self.df)
+                replay.generate_game_img(self.dic)
             embed = Embed(title="Replay", description=f"{replay_id}", color=Colour.blurple())
             file = File(f'data/match_imgs/{replay_id}.png', filename="image.png")
             embed.set_image(url="attachment://image.png")
@@ -122,11 +95,8 @@ class BotFunctions():
 
     async def link(self, interaction, riotid, tag, member=None):
         # link id
-        if member is None:
-            discord_id = interaction.user.id
-        else:
-            discord_id = member.id
-        if discord_id in self.df.index:
+        discord_id = str(interaction.user.id) if member is None else str(member.id)
+        if discord_id in self.dic:
             await interaction.followup.send(content=f'<@{discord_id}> is already linked')
             return
         if (riotid is None) or (tag is None):
@@ -148,27 +118,29 @@ class BotFunctions():
                 await interaction.followup.send(content=f'Successfully linked! {gamename} Rate:{mu}')
             else:
                 mu, sigma = MU, SIGMA
-                await interaction.followup.send(content=f'Successfully linked! unranked summmoner. Rate:1500')
+                await interaction.followup.send(content='Successfully linked! unranked summmoner. Rate:1500')
             # set rating
-            self.df.loc[discord_id] = [puuid, gamename, tag, sn, [mu], [sigma], ['init']]
-            self.save_df2csv()
+            self.dic[discord_id] = {
+                'puuid': puuid,
+                'gamename': gamename,
+                'tag': tag,
+                'sn': sn,
+                'mu': [mu],
+                'sigma': [sigma],
+                'gameid': ['init']
+            }
+            self.save_dic2json()
 
     async def unlink(self, interaction, member=None):
-        if member is None:
-            discord_id = interaction.user.id
-        else:
-            discord_id = member.id
-        self.df = self.df.drop(discord_id)
+        discord_id = str(interaction.user.id) if member is None else str(member.id)
+        self.dic.pop(discord_id)
         await interaction.response.send_message(content=f'<@{discord_id}> has been unlinked')
 
     async def stats(self, interaction, member):
-        if member is not None:
-            discord_id = member.id
-        else:
-            discord_id = interaction.user.id
-        summoner_name = self.df.loc[discord_id, 'sn']
-        gamename = self.df.loc[discord_id, 'gamename']
-        tag = self.df.loc[discord_id, 'tag']
+        discord_id = str(interaction.user.id) if member is None else str(member.id)
+        summoner_name = self.dic[discord_id]['sn']
+        gamename = self.dic[discord_id]['gamename']
+        tag = self.dic[discord_id]['tag']
         if summoner_name is None:
             await interaction.followup.send(content="Summoner name is not linked")
             return
@@ -228,7 +200,7 @@ class BotFunctions():
                 user_icon = ""
             embed.set_author(name=f'{gamename} #{tag}', icon_url=user_icon)
             embed.set_thumbnail(url="attachment://champ.png")
-            rate = self.df.loc[discord_id, 'mu'][-1]
+            rate = self.dic[discord_id]['mu'][-1]
             embed.add_field(name="Rating", value=f"{int(rate)}", inline=False)
             embed.add_field(name="Winrate", value=f"{winrate:.3g}")
             embed.add_field(name="KDA", value=f"{average_kda:.3g}")
@@ -236,8 +208,8 @@ class BotFunctions():
             embed.add_field(name="\nRole", value=f"{role_str}", inline=False)
             embed.add_field(name="\nFavorite Champions", value=f"{champ_str}", inline=False)
             # embed.add_field(name="\nRecent Games", value=f"{recent}", inline=False)
-            mus = self.df.loc[discord_id, 'mu']
-            sigmas = self.df.loc[discord_id, 'mu']
+            mus = self.dic[discord_id]['mu']
+            sigmas = self.dic[discord_id]['sigma']
             self.image_gen.generate_rating_img(mus, sigmas, summoner_name)
             file = File(f'data/ratings_imgs/{summoner_name}.png', filename="image.png")
             embed.set_image(url="attachment://image.png")
@@ -247,11 +219,8 @@ class BotFunctions():
             return
 
     async def bestgame(self, interaction, member):
-        if member is not None:
-            discord_id = member.id
-        else:
-            discord_id = interaction.user.id
-        summoner_name = self.df.loc[discord_id, 'sn']
+        discord_id = str(interaction.user.id) if member is None else str(member.id)
+        summoner_name = self.dic[discord_id]['sn']
         if summoner_name is None:
             await interaction.followup.send(content="Summoner name is not linked")
             return
@@ -276,13 +245,10 @@ class BotFunctions():
             await interaction.followup.send.reply(file=file, embed=embed)
 
     async def detail(self, interaction, member):
-        if member is not None:
-            discord_id = member.id
-        else:
-            discord_id = interaction.user.id
-        summoner_name = self.df.loc[discord_id, 'sn']
-        gamename = self.df.loc[discord_id, 'gamename']
-        tag = self.df.loc[discord_id, 'tag']
+        discord_id = str(interaction.user.id) if member is None else str(member.id)
+        summoner_name = self.dic[discord_id]['sn']
+        gamename = self.dic[discord_id]['gamename']
+        tag = self.dic[discord_id]['tag']
         if summoner_name is None:
             await interaction.followup.send(content="Summoner name is not linked")
             return
@@ -340,7 +306,7 @@ class BotFunctions():
             return
 
     async def send_team(self, reaction):
-        res, team = await self.skill_rating.make_team(self.df, reaction)
+        res, team = await self.skill_rating.make_team(self.dic, reaction)
         if not res:
             await reaction.message.reply(content=f"<@{team}> is not linked")
             return
@@ -351,8 +317,8 @@ class BotFunctions():
             team2 += self.team_str(team[1][i])
         name_list = []
         for id in team[0]:
-            gamename = self.df.loc[id, 'gamename'].replace(' ', '+')
-            tag = self.df.loc[id, 'tag']
+            gamename = self.dic[id]['gamename'].replace(' ', '+')
+            tag = self.dic[id]['tag']
             name_list.append(f'{gamename}%23{tag}')
         name1 = '%2C'.join(name_list)
         button = ui.Button(label="OPGG", style=ButtonStyle.primary, url=f'https://www.op.gg/multisearch/jp?summoners={name1}')
@@ -363,8 +329,8 @@ class BotFunctions():
         await reaction.message.channel.send(embed=embed, view=view)
         name_list = []
         for id in team[1]:
-            gamename = self.df.loc[id, 'gamename'].replace(' ', '+')
-            tag = self.df.loc[id, 'tag']
+            gamename = self.dic[id]['gamename'].replace(' ', '+')
+            tag = self.dic[id]['tag']
             name_list.append(f'{gamename}%23{tag}')
         name2 = '%2C'.join(name_list)
         button = ui.Button(label="OPGG", style=ButtonStyle.primary, url=f'https://www.op.gg/multisearch/jp?summoners={name2}')
@@ -375,10 +341,10 @@ class BotFunctions():
         await reaction.message.channel.send(embed=embed, view=view)
 
     def team_str(self, id):
-        name = self.df.loc[id, 'sn']
-        rate = self.df.loc[id, 'mu'][-1]
-        gamename = self.df.loc[id, 'gamename']
-        tag = self.df.loc[id, 'tag']
+        name = self.dic[id]['sn']
+        rate = self.dic[id]['mu'][-1]
+        gamename = self.dic[id]['gamename']
+        tag = self.dic[id]['tag']
         if name is None:
             name = 'not linked summoner'
         summoner_df = self.logdf[self.logdf["NAME"] == name]
@@ -388,29 +354,29 @@ class BotFunctions():
             winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
             win = int(sum(summoner_df["result"] == 'Win'))
             lose = int(sum(summoner_df["result"] == 'Lose'))
-            stats = f'Win:{win} Lose:{lose} {winrate:.3g}% Rate:{rate}'
+            stats = f'Win:{win} Lose:{lose} {winrate:.3g}% Rate:{int(rate)}'
         return f'<@{id}> ({gamename}#{tag}) \n\u200b {stats} \n\u200b'
 
     def result_str(self, team):
         team_str = ''
         for sn in team:
-            if sn in self.df['sn'].values:
-                id = _search_df_index(self.df, 'sn', sn)
-                gamename = self.df.loc[id, 'gamename']
-                tag = self.df.loc[id, 'tag']
-                team_str += f'<@{id}> ({gamename} #{tag}) \n\u200b'
-            else:
+            id = get_keys(self.dict, 'sn', sn)
+            if id is None:
                 id = sn
                 team_str += f'not linked summoner ({sn}) \n\u200b'
-            if len(self.df.loc[id, 'mu']) > 1:
-                diff = int(self.df.loc[id, 'mu'][-1] - self.df.loc[id, 'mu'][-2])
+            else:
+                gamename = self.dic[id]['gamename']
+                tag = self.dic[id]['tag']
+                team_str += f'<@{id}> ({gamename} #{tag}) \n\u200b'
+            if len(self.dic[id]['mu']) > 1:
+                diff = int(self.dic[id]['mu'][-1] - self.dic[id]['mu'][-2])
             else:
                 diff = 0
             summoner_df = self.logdf[self.logdf["NAME"] == sn]
             winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
             win = int(sum(summoner_df["result"] == 'Win'))
             lose = int(sum(summoner_df["result"] == 'Lose'))
-            rate = int(self.df.loc[id, 'mu'][-1])
+            rate = int(self.dic[id]['mu'][-1])
             if diff > 0:
                 diff = '+' + str(diff)
             stats = f'Win:{win} Lose:{lose} {winrate:.3g}% Rate:{int(rate)} ({diff})'
@@ -439,13 +405,13 @@ class BotFunctions():
                     game_df = self.logdf[self.logdf["game_id"] == replay_id]
                     for _, row in game_df.iterrows():
                         name = row["NAME"]
-                        if name in self.df['sn'].values:
-                            discord_id = _search_df_index(self.df, 'sn', name)
-                            idx = self.df.loc[discord_id, 'gameid'].index(replay_id)
-                            self.df.loc[discord_id, 'mu'].pop(idx)
-                            self.df.loc[discord_id, 'sigma'].pop(idx)
-                            self.df.loc[discord_id, 'gameid'].pop(idx)
-                    self.save_df2csv()
+                        discord_id = get_keys(self.dict, 'sn', name)
+                        if discord_id is not None:
+                            idx = self.dic[discord_id]['gameid'].index(replay_id)
+                            self.dic[discord_id]['mu'].pop(idx)
+                            self.dic[discord_id]['sigma'].pop(idx)
+                            self.dic[discord_id]['gameid'].pop(idx)
+                    self.save_dic2json()
                     target = self.logdf.index[self.logdf["game_id"] == replay_id]
                     self.logdf = self.logdf.drop(target)
                     self.logdf.to_csv('data/log/log.csv', index=False)
@@ -463,64 +429,56 @@ class BotFunctions():
         await interaction.followup.send(content="Reverted")
 
     async def reset_rate(self, interaction, member):
-        if member is not None:
-            discord_id = member.id
-        else:
-            discord_id = interaction.user.id
-        gamename = self.df.loc[discord_id, 'gamename']
-        puuid = self.df.loc[discord_id, 'puuid']
-        gamename = self.df.loc[discord_id, 'gamename']
+        discord_id = str(interaction.user.id) if member is None else str(member.id)
+        puuid = self.dic[discord_id]['puuid']
+        gamename = self.dic[discord_id]['gamename']
         if puuid is None:
             await interaction.followup.send(content="Summoner name is not linked")
         else:
             # set rating
             rank, tier = self.watcher.search_rank(puuid)
             if rank is not None and tier is not None:
-                mu = self.tierdf.loc[f'{tier} {rank}', 'Point']
+                mu = int(self.tierdf.loc[f'{tier} {rank}', 'Point'])
                 sigma = INIT_SIGMA
                 await interaction.followup.send(content=f'{gamename} Rate:{mu}')
             else:
                 mu, sigma = MU, SIGMA
                 await interaction.followup.send(content=f'unranked summmoner. Rate:{MU}')
-            self.df.loc[discord_id]['mu'].append(mu)
-            self.df.loc[discord_id]['sigma'].append(sigma)
-            self.df.loc[discord_id]['gameid'].append('reset')
-            self.save_df2csv()
+            self.dic[discord_id]['mu'].append(mu)
+            self.dic[discord_id]['sigma'].append(sigma)
+            self.dic[discord_id]['gameid'].append('reset')
+            self.save_dic2json()
 
     async def set_rate(self, interaction, mu, sigma=400, member=None):
-        if member is not None:
-            discord_id = member.id
-        else:
-            discord_id = interaction.user.id
-        gamename = self.df.loc[discord_id, 'gamename']
-        puuid = self.df.loc[discord_id, 'puuid']
-        gamename = self.df.loc[discord_id, 'gamename']
+        discord_id = str(interaction.user.id) if member is None else str(member.id)
+        puuid = self.dic[discord_id]['puuid']
+        gamename = self.dic[discord_id]['gamename']
         if puuid is None:
             await interaction.response.send_message(content="Summoner name is not linked")
         else:
             await interaction.response.send_message(content=f'{gamename} Rate:{mu}')
-            self.df.loc[discord_id]['mu'].append(mu)
-            self.df.loc[discord_id]['sigma'].append(sigma)
-            self.df.loc[discord_id]['gameid'].append('set')
-            self.save_df2csv()
+            self.dic[discord_id]['mu'].append(mu)
+            self.dic[discord_id]['sigma'].append(sigma)
+            self.dic[discord_id]['gameid'].append('set')
+            self.save_dic2json()
 
     async def rename(self, interaction, gamename, tag, member=None):
-        if member is not None:
-            discord_id = member.id
-        else:
-            discord_id = interaction.user.id
+        discord_id = str(interaction.user.id) if member is None else str(member.id)
         if (gamename is None) or (tag is None):
             await interaction.followup.send(content='/link gamename #tag')
+            return
         res = self.watcher.search_by_riot_id(gamename, tag)
         if res is None:
             await interaction.followup.send(content=f'{gamename} #{tag} has not found')
+            return
         else:
             gamename = res['gameName']
             tag = res['tagLine']
-            self.df.loc[discord_id]['gamename'] = gamename
-            self.df.loc[discord_id]['tag'] = tag
-            self.save_df2csv()
+            self.dic[discord_id]['gamename'] = gamename
+            self.dic[discord_id]['tag'] = tag
+            self.save_dic2json()
             await interaction.followup.send(content=f'Success rename {gamename} #{tag}')
+            return
 
     async def update(self, interaction):
         #  download versions.json
@@ -548,6 +506,6 @@ class BotFunctions():
         shutil.move(f'dragontail/{version}/data/en_US/runesReforged.json', 'data/runesReforged.json')
         await interaction.followup.send(content=f"updated version {version}")
 
-    def save_df2csv(self):
-        self.df.to_csv(LinkDataCSV)
-        self.df = _df2list(self.df)
+    def save_dic2json(self):
+        json_file = open(LinkDataJSON, mode="w", encoding='utf-8')
+        json.dump(self.dic, json_file, indent=2, ensure_ascii=False)
