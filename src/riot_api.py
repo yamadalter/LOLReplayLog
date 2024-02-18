@@ -1,8 +1,6 @@
 from riotwatcher import LolWatcher, RiotWatcher, ApiError
+from common import REGION, ACCOUNTREGION
 import configparser
-
-REGION = 'jp1'
-ACCOUNTREGION = 'ASIA'
 
 
 class Watcher:

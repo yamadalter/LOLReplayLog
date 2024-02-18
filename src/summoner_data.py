@@ -3,9 +3,7 @@ import os
 import replay_reader
 import skill_rating
 import pandas as pd
-
-SummonerDataCSV = 'data/summoner_data.csv'
-
+from common import SummonerDataCSV
 
 def simplify(num):
     if num % 1 == 0:

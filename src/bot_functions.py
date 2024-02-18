@@ -5,6 +5,7 @@ import skill_rating
 import riot_api
 from discord import File, Embed, Colour, ui, ButtonStyle
 from utils import get_keys
+from common import TEAM_NUM, MU, SIGMA, INIT_SIGMA, MIN_SIGMA, LANE, LinkDataJSON
 import os
 import shutil
 import configparser
@@ -14,14 +15,6 @@ import tarfile
 import pandas as pd
 import numpy as np
 
-
-TEAM_NUM = 5
-MU = 1500
-SIGMA = MU / 3
-INIT_SIGMA = 400
-MIN_SIGMA = 250
-LANE = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"]
-LinkDataJSON = 'data/linkdata.json'
 
 
 class BotFunctions():

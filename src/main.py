@@ -1,12 +1,11 @@
 import os
 import configparser
 import discord
+from common import TEAM_NUM, EMOJI_CHECK
 from discord import Client, Game, Intents, Interaction, AllowedMentions
 from discord.app_commands import CommandTree
 from bot_functions import BotFunctions
 
-TEAM_NUM = 5
-EMOJI_CHECK = "✅"
 
 config = configparser.ConfigParser()
 config.read('src/config.ini')

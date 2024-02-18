@@ -4,17 +4,11 @@ import math
 import numpy as np
 import pandas as pd
 from utils import get_keys
+from common import TEAM_NUM, MU, SIGMA, INIT_SIGMA, MIN_SIGMA, SHUFFLE_NUM
 from openskill import Rating, rate, create_rating, team_rating
 from typing import Union, List
 from openskill.constants import beta
 from openskill.statistics import phi_major
-
-TEAM_NUM = 5
-MU = 1500
-SIGMA = MU / 3
-INIT_SIGMA = 400
-MIN_SIGMA = 250
-SHUFFLE_NUM = 1000
 
 
 class SkillRating:
