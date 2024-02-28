@@ -94,7 +94,7 @@ class SkillRating:
 
     def update_ratings(self, d, id, winners, losers):
         if len(winners) < TEAM_NUM or len(losers) < TEAM_NUM:
-            return None
+            return None, None
         t1, t1_name = self.get_player(d, winners)
         t2, t2_name = self.get_player(d, losers)
         if t1 is None or t2 is None:

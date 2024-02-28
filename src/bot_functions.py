@@ -118,8 +118,8 @@ class BotFunctions():
                 'gamename': gamename,
                 'tag': tag,
                 'sn': sn,
-                'mu': [mu],
-                'sigma': [sigma],
+                'mu': [float(mu)],
+                'sigma': [float(sigma)],
                 'gameid': ['init']
             }
             self.save_dic2json()
@@ -353,7 +353,7 @@ class BotFunctions():
     def result_str(self, team):
         team_str = ''
         for sn in team:
-            id = get_keys(self.dict, 'sn', sn)
+            id = get_keys(self.dic, 'sn', sn)
             if id is None:
                 id = sn
                 team_str += f'not linked summoner ({sn}) \n\u200b'
