@@ -5,7 +5,7 @@ import skill_rating
 import riot_api
 from discord import File, Embed, Colour, ui, ButtonStyle
 from utils import get_keys
-from common import TEAM_NUM, MU, SIGMA, INIT_SIGMA, MIN_SIGMA, LANE, LinkDataJSON
+from common import TEAM_NUM, MU, SIGMA, INIT_SIGMA, MIN_SIGMA, LANE, LinkDataJSON, TierData
 import os
 import shutil
 import configparser
@@ -22,7 +22,8 @@ class BotFunctions():
         super().__init__()
         config = configparser.ConfigParser()
         config.read('config.ini')
-        self.tierdf = pd.read_csv('data/tier.csv', index_col='Rank')
+        json_open = open(TierData, 'r', encoding='utf-8')
+        self.tierdic = json.load(json_open)
         if os.path.exists(LinkDataJSON):
             json_open = open(LinkDataJSON, 'r', encoding='utf-8')
             self.dic = json.load(json_open)
@@ -106,7 +107,7 @@ class BotFunctions():
             sn = self.watcher.search_puuid(puuid)['name']
             rank, tier = self.watcher.search_rank(puuid)
             if rank is not None and tier is not None:
-                mu = self.tierdf.loc[f'{tier} {rank}', 'Point']
+                mu = float(self.tierdic[tier][rank])
                 sigma = INIT_SIGMA
                 await interaction.followup.send(content=f'Successfully linked! {gamename} Rate:{mu}')
             else:
