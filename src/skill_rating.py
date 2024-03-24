@@ -14,7 +14,6 @@ from openskill.statistics import phi_major
 class SkillRating:
     def __init__(self):
         self.ratings = {}
-        self.tierdf = pd.read_csv('data/tier.csv', index_col='Rank')
 
     async def make_team(self, d, reaction):
         players = []

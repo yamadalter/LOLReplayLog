@@ -107,7 +107,7 @@ class BotFunctions():
             sn = self.watcher.search_puuid(puuid)['name']
             rank, tier = self.watcher.search_rank(puuid)
             if rank is not None and tier is not None:
-                mu = float(self.tierdic[tier][rank])
+                mu = self.tierdic[tier][rank]
                 sigma = INIT_SIGMA
                 await interaction.followup.send(content=f'Successfully linked! {gamename} Rate:{mu}')
             else:
@@ -278,10 +278,10 @@ class BotFunctions():
                     champ_str = ''
                     for index, v in champ.items():
                         champ_str += f'**{index}** : {v}  '
-                    embed.add_field(name=f"{lane}", value=f"**Games** : **{len(lane_df)}**", inline=False)
+                    embed.add_field(name=f"**{lane}**", value=f"**Games** : {len(lane_df)}")
                     embed.add_field(name="Winrate", value=f"{winrate:.3g}")
                     embed.add_field(name="KDA", value=f"{average_kda:.3g}")
-                    embed.add_field(name="Wards", value=f"{average_vision_ward:.3g}")
+                    # embed.add_field(name="Wards", value=f"{average_vision_ward:.3g}")
                     embed.add_field(name="\nFavorite Champions", value=f"{champ_str}\n\u200b", inline=False)
             average_kill = str(sum(summoner_df["CHAMPIONS_KILLED"].astype(int)) / len(summoner_df))
             average_death = str(sum(summoner_df["NUM_DEATHS"].astype(int)) / len(summoner_df))

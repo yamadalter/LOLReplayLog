@@ -48,7 +48,7 @@ async def link(interaction: Interaction, riotid: str, tag: str, member: discord.
 
 @tree.command(name='unlink', description='DiscordとRiot IDの紐づけを解きます')
 async def unlink(interaction: Interaction, member: discord.Member = None):
-    await bot_funcs.link(interaction, member)
+    await bot_funcs.unlink(interaction, member)
 
 
 @tree.command(name='rename', description='紐づけしているRiot idを変更します')
