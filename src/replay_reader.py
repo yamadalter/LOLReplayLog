@@ -5,56 +5,21 @@ import image_gen
 from utils import get_keys
 
 
-class ReplayReader:
-    def __init__(self, replay_id):
-        if os.path.exists(f'data/replays/{replay_id}.json'):
-            filename = f"data/replays/{replay_id}.json"
-        else:
-            filename = f"data/replays/{replay_id}.rofl"
-        if filename.endswith('.rofl'):
-            with open(filename, 'r', encoding="utf8", errors="ignore") as f:
-                read_data = f.read()
-                start_json = read_data.find(r'{"gameLength"')
-                read_data = read_data[start_json:]
-                end_json = read_data.find(r'\"}]"}')
-                read_data = read_data[:(end_json + 6)]
-            with open(f"{filename[0:-5]}.json", "w") as f:
-                json_from_rofl = json.loads(read_data)
-                new_json_str = json.dumps(json_from_rofl, indent=2)
-                f.write(new_json_str)
-            os.remove(filename)  # Rofl files take up a lot of space. Convert them to their JSON and delete them
-            filename = filename[0:-5] + ".json"
-        with open(filename) as json_file:
-            self.json = json.load(json_file)
-        self.stats = json.loads(self.json['statsJson'])
-        self.map = self.infer_map()
-        self.game_time = (self.json['gameLength'] / 1000)  # (Milliseconds -> Seconds)
-        self.game_time_str = time.strftime("%M:%S", time.gmtime(self.game_time))
+class ReplayReader():
+    def __init__(self, bot_functions, replay_id):
         self.match_id = replay_id
         self.image_gen = image_gen.ImageGen()
         f = open('data/versions.json', 'r')
         json_dict = json.load(f)
         self.version = json_dict[0]
-
-    def infer_map(self):  # The map is not given to us, so we must infer.
-        sr_trinkets = [3340, 3364, 3363, 3513]
-        sr_stats = ["BARON_KILLS", "DRAGON_KILLS", "WARD_PLACED",
-                    "NEUTRAL_MINIONS_KILLED"]  # If any of these stats are above 0, it is guaranteed to be Summoner's Rift.
-        poro_snax = 2052
-        is_aram = True
-        for player_stats in self.stats:
-            for sr_stat in sr_stats:
-                if int(player_stats[sr_stat]) > 0:
-                    is_aram = False
-            for trinket in sr_trinkets:  # Check trinket to find wards (SR) or Poro-Snax (HA)
-                if int(player_stats["ITEM6"]) == trinket:
-                    is_aram = False
-                elif int(player_stats["ITEM6"]) == poro_snax:
-                    is_aram = True
-        if is_aram:
-            return "Howling Abyss"
-        elif not is_aram:  # Sadly Twisted Treeline no longer exists
-            return "Summoner's Rift"
+        self.game_df = bot_functions.game.query(f'id == {replay_id}')
+        self.player_df = bot_functions.df_player
+        self.team_df = bot_functions.df_team.query(f'gameId == {replay_id}')
+        self.bans_df = bot_functions.df_bans.query(f'gameId == {replay_id}')
+        self.stats_df = bot_functions.df_stats.query(f'gameId == {replay_id}')
+        self.participants_df = bot_functions.df_participants.query(f'gameId == {replay_id}')
+        self.game_time = self.game_df['gameDuration']
+        self.game_time_str = str(self.game_df['duration'])
 
     def results(self):  # Returns a list of winners & losers
         winners = []
@@ -75,25 +40,24 @@ class ReplayReader:
         :return:
         """
         player_list = []
-        for players in self.stats:
-            player_dict = {}
+        for p in self.participants_df:
+            puuid = p['puuid']
+            pid = p['participantId']
+            player_dict = self.stats_df.query(f'participantId == {pid}')
             items = []
             for i in range(7):
-                items.append(players[f"ITEM{i}"])
-            if players["NAME"] == summoner_name or players["SKIN"] == champ or (summoner_name is None and champ is None):
-                player_dict = players
-                player_dict["game_id"] = self.match_id
-                player_dict["result"] = 'Win' if players["WIN"] == "Win" else 'Lose'
-                player_dict["kda"] = f"{players['CHAMPIONS_KILLED']}/{players['NUM_DEATHS']}/{players['ASSISTS']}"
-                player_dict["cs"] = str(int(players["MINIONS_KILLED"]) + int(players["NEUTRAL_MINIONS_KILLED"]))
-                player_dict["csm"] = int(player_dict["cs"]) / (self.game_time / 60)
-                player_dict["game_time"] = self.game_time
-                player_dict["runes"] = [[players["PERK1"], players["PERK2"], players["PERK3"]], [players["PERK4"], players["PERK5"]]]  # smaller runes
-                player_dict["items"] = items
-                player_dict["map"] = self.map
-                player_dict['version'] = self.version
-                # player_dict["rate"] = rate[players["NAME"]]
-                player_list.append(player_dict)
+                items.append(self.stats_df[f"item{i}"])
+            player_dict['puuid'] = puuid
+            player_dict["game_id"] = self.match_id
+            player_dict["result"] = 'Win' if player_dict["win"] else 'Lose'
+            player_dict["kda"] = f"{player_dict['kills']}/{player_dict['deaths']}/{player_dict['assists']}"
+            player_dict["cs"] = str(int(player_dict["totalMinionsKilled"]) + int(player_dict["neutralMinionsKilled"]))
+            player_dict["csm"] = int(player_dict["cs"]) / (self.game_time / 60)
+            player_dict["game_time"] = self.game_time
+            player_dict["runes"] = [[player_dict["perk0"], player_dict["perk1"], player_dict["perk2"]], [player_dict["perk3"], player_dict["perk4"]]]  # smaller runes
+            player_dict["items"] = items
+            player_dict['version'] = self.version
+            player_list.append(player_dict)
         if len(player_list) == 1:
             return player_list[0]
         return player_list
@@ -119,9 +83,8 @@ class ReplayReader:
                 list_to_mod = losers
             elif player["result"] == "Win":
                 list_to_mod = winners
-            id = get_keys(d, 'sn', player["NAME"])
-            player['gamename'] = d[id]['gamename']
-            player['tag'] = d[id]['tag']
+            player['gamename'] = self.player_df.loc[player['puuid']]['gameName']
+            player['tag'] = self.player_df.loc[player['puuid']]['tagLine']
             list_to_mod.append(player)
         win_kda, lose_kda = self.get_team_kdas()
-        self.image_gen.generate_game_img([[win_kda, lose_kda], winners, losers, self.map, self.game_time_str], self.match_id)
+        self.image_gen.generate_game_img([[win_kda, lose_kda], winners, losers, "Summoner's Rift", self.game_time_str], self.match_id)

@@ -4,7 +4,9 @@ import discord
 from common import TEAM_NUM, EMOJI_CHECK
 from discord import Client, Game, Intents, Interaction, AllowedMentions
 from discord.app_commands import CommandTree
+from discord.ext import tasks
 from bot_functions import BotFunctions
+from db import DB
 
 
 config = configparser.ConfigParser()
@@ -27,6 +29,19 @@ for path in req_directories:
         print(f"Required directory {path} not found, creating")
         os.mkdir(path)
 
+db = DB()
+
+
+@tasks.loop(minutes=1)
+async def db_sync():
+    bot_funcs.df_game, bot_funcs.df_player, bot_funcs.df_team, bot_funcs.df_bans, bot_funcs.df_stats, bot_funcs.df_participants = db.get_tables()
+    await bot_funcs.result()
+
+
+@tasks.loop(hours=1)
+async def update_version():
+    bot_funcs.update(None)
+
 
 @client.event
 async def on_ready():
@@ -38,6 +53,8 @@ async def on_ready():
 
     # スラッシュコマンドを同期
     await tree.sync()
+
+    await db_sync.start()
 
 
 @tree.command(name='link', description='DiscordとRiot IDを紐づけます')
@@ -55,37 +72,6 @@ async def unlink(interaction: Interaction, member: discord.Member = None):
 async def rename(interaction: Interaction, riotid: str, tag: str, member: discord.Member = None):
     await interaction.response.defer(thinking=True)
     await bot_funcs.rename(interaction, riotid, tag, member)
-
-
-@tree.command(name='set_rate', description='レートを任意の値に変更します')
-async def set_rate(interaction: Interaction, rate: int, sigma: int = 400, member: discord.Member = None):
-    await bot_funcs.set_rate(interaction, rate, sigma, member)
-
-
-@tree.command(name='reset_rate', description='SoloQレートを基にレートをリセットします')
-async def reset_rate(interaction: Interaction, member: discord.Member = None):
-    await interaction.response.defer(thinking=True)
-    await bot_funcs.reset_rate(interaction, member)
-
-
-@tree.command(name='team', description='チーム分けを行います')
-async def team(interaction: Interaction):
-    allowed_mentions = AllowedMentions(everyone=True)
-    await interaction.response.send_message('@here カスタム参加する人は✅を押してください', allowed_mentions=allowed_mentions)
-    msg = await interaction.original_response()
-    await msg.add_reaction('✅')
-
-
-@tree.command(name='replay', description='リプレイファイルをアップロードし、戦績を保管します')
-async def replay(interaction: Interaction, attachment: discord.Attachment):
-    await interaction.response.defer(thinking=True)
-    await bot_funcs.replay(interaction, attachment)
-
-
-@tree.command(name='revert', description='戦績を戻します')
-async def revert(interaction: Interaction, gameid: str):
-    await interaction.response.defer(thinking=True)
-    await bot_funcs.revert(interaction, gameid)
 
 
 @tree.command(name='stats', description='戦績を確認します')
@@ -110,22 +96,6 @@ async def bestgame(interaction: Interaction, member: discord.Member = None):
 async def update(interaction: Interaction):
     await interaction.response.defer(thinking=True)
     await bot_funcs.update(interaction)
-
-
-@client.event
-async def on_reaction_add(reaction, author):
-    if author == client.user:
-        return
-
-    if (reaction.emoji == EMOJI_CHECK
-        and "カスタム参加する人は✅を押してください" in reaction.message.content
-        and reaction.message.author == client.user):
-
-        remove_str = f'<@!{str(author.id)}>'
-        await reaction.message.edit(content=reaction.message.content.replace(remove_str, ''))
-        if reaction.count == TEAM_NUM * 2 + 1:
-            await bot_funcs.send_team(reaction)
-            await reaction.message.delete()
 
 
 client.run(DISCORD_BOT_TOKEN)
