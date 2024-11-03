@@ -3,9 +3,10 @@ import replay_reader
 import summoner_data
 import skill_rating
 import riot_api
-from discord import File, Embed, Colour, ui, ButtonStyle
+from discord import File, Embed, Colour, ui, ButtonStyle, Webhook
 from utils import get_keys
 from common import TEAM_NUM, MU, SIGMA, INIT_SIGMA, MIN_SIGMA, LANE, LinkDataJSON, TierData, result_webhook
+import aiohttp
 import os
 import shutil
 import configparser
@@ -47,29 +48,19 @@ class BotFunctions():
         self.df_stats = None
         self.df_participants = None
 
-    async def send_discord_message(webhook_url, message, embed):
-        data = {
-            "content": message,
-            "embeds": [embed.to_dict()],
-        }
-        response = requests.post(webhook_url, json=data)
-        if response.status_code == 204:
-            print("Message sent successfully to Discord.")
-        else:
-            print("Failed to send message to Discord.")
-
     async def result(self, interaction=None, id=None):  # Get match from ID
-        replay = replay_reader.ReplayReader(id)
+        replay = replay_reader.ReplayReader(self, id)
         if not os.path.exists(f'data/match_imgs/{id}.png'):
             replay.generate_game_img(self.dic)
-        embed = Embed(title="Replay", description=f"{id}", color=Colour.blurple())
+        embed = Embed(title="Result", description=f"{id}", color=Colour.blurple())
         file = File(f'data/match_imgs/{id}.png', filename="image.png")
         embed.set_image(url="attachment://image.png")
         if interaction is not None:
             await interaction.followup.send(file=file, embed=embed)
         else:
-            message = 'Game Result'
-            await self.send_discord_message(result_webhook, message, embed)
+            async with aiohttp.ClientSession() as session:
+                webhook = Webhook.from_url(result_webhook, session=session)
+                await webhook.send(file=file, embed=embed)
 
     async def link(self, interaction, riotid, tag, member=None):
         # link id
@@ -88,14 +79,13 @@ class BotFunctions():
             puuid = res['puuid']
             gamename = res['gameName']
             tag = res['tagLine']
-            sn = self.watcher.search_puuid(puuid)['name']
+            # sn = self.watcher.search_puuid(puuid)['name']
             await interaction.followup.send(content='Successfully linked!')
             # set rating
             self.dic[discord_id] = {
                 'puuid': puuid,
                 'gamename': gamename,
                 'tag': tag,
-                'sn': sn,
             }
             self.save_dic2json()
 
@@ -108,7 +98,7 @@ class BotFunctions():
         discord_id = str(interaction.user.id) if member is None else str(member.id)
         gamename = self.dic[discord_id]['gamename']
         tag = self.dic[discord_id]['tag']
-        puuid = self.df_player.query('gameName == @gamename and tagLine == @tag')['puuid']
+        puuid = self.df_player.query('gameName == @gamename and tagLine == @tag')['puuid'].values[0]
         if puuid is None:
             await interaction.followup.send(content="Summoner is not linked")
             return
@@ -147,7 +137,7 @@ class BotFunctions():
                 games = len(stats_df)
             recent = '** '
             for _, row in stats_df[:games][::-1].iterrows():
-                if row["result"]:
+                if row["win"]:
                     recent += ":blue_square: "
                 else:
                     recent += ":red_square: "
@@ -168,8 +158,8 @@ class BotFunctions():
                 user_icon = ""
             embed.set_author(name=f'{gamename} #{tag}', icon_url=user_icon)
             embed.set_thumbnail(url="attachment://champ.png")
-            rate = self.dic[discord_id]['mu'][-1]
-            embed.add_field(name="Rating", value=f"{int(rate)}", inline=False)
+            # rate = self.dic[discord_id]['mu'][-1]
+            # embed.add_field(name="Rating", value=f"{int(rate)}", inline=False)
             embed.add_field(name="Winrate", value=f"{winrate:.3g}")
             embed.add_field(name="KDA", value=f"{average_kda:.3g}")
             embed.add_field(name="\nRole", value=f"{role_str}", inline=False)
@@ -208,60 +198,62 @@ class BotFunctions():
 
     async def detail(self, interaction, member):
         discord_id = str(interaction.user.id) if member is None else str(member.id)
-        summoner_name = self.dic[discord_id]['sn']
         gamename = self.dic[discord_id]['gamename']
         tag = self.dic[discord_id]['tag']
-        if summoner_name is None:
-            await interaction.followup.send(content="Summoner name is not linked")
+        puuid = self.df_player.query('gameName == @gamename and tagLine == @tag')['puuid'].values[0]
+        if puuid is None:
+            await interaction.followup.send(content="Summoner is not linked")
             return
         name = f"<@{discord_id}>"
         avator = await self.user(discord_id)
 
-        if self.logdf is not None:
-            summoner_df = self.logdf[self.logdf["NAME"] == summoner_name]
-            if len(summoner_df) < 1:
+        if self.df_player is not None:
+            stats_df = self.df_stats[self.df_stats["puuid"] == puuid]
+            p_df = self.df_participants[self.df_participants["puuid"] == puuid]
+            if len(stats_df) < 1:
                 await interaction.followup.send(content="Log not found")
                 return
             if avator is not None and avator.avatar is not None:
                 user_icon = avator.avatar.url
             else:
                 user_icon = ""
-            embed = Embed(title="Detail stats", description=f"**{name}**\nTotal Games {len(summoner_df)}\n", color=0xFFFFFF)
+            embed = Embed(title="Detail stats", description=f"**{name}**\nTotal Games {len(stats_df)}\n", color=0xFFFFFF)
             embed.set_author(name=f'{gamename} #{tag}', icon_url=user_icon)
             for lane in LANE:
-                lane_df = summoner_df[summoner_df["TEAM_POSITION"] == lane]
+                lane_df = p_df[p_df["position"] == lane]
+                merged_df = pd.merge(lane_df, stats_df, on=["gameId", "participantId"])
                 if len(lane_df) > 0:
-                    average_kill = str(sum(lane_df["CHAMPIONS_KILLED"].astype(int)) / len(lane_df))
-                    average_death = str(sum(lane_df["NUM_DEATHS"].astype(int)) / len(lane_df))
-                    average_assist = str(sum(lane_df["ASSISTS"].astype(int)) / len(lane_df))
+                    average_kill = str(sum(merged_df["kills"].astype(int)) / len(merged_df))
+                    average_death = str(sum(merged_df["deaths"].astype(int)) / len(merged_df))
+                    average_assist = str(sum(merged_df["assists"].astype(int)) / len(merged_df))
                     if average_death == '0.0':
                         average_death = '1.0'
                     average_kda = (float(average_kill) + float(average_assist)) / float(average_death)
-                    winrate = sum(lane_df["result"] == 'Win') / len(lane_df) * 100
-                    average_vision_ward = sum(lane_df["VISION_WARDS_BOUGHT_IN_GAME"].astype(int)) / len(lane_df)
+                    winrate = sum(merged_df["win"]) / len(lane_df) * 100
+                    # average_vision_ward = sum(lane_df["VISION_WARDS_BOUGHT_IN_GAME"].astype(int)) / len(lane_df)
                     if len(lane_df) > 4:
-                        champ = lane_df["SKIN"].value_counts()[:5]
+                        champ = merged_df["championName"].value_counts()[:5]
                     else:
-                        champ = lane_df["SKIN"].value_counts()[:len(lane_df)]
+                        champ = merged_df["championName"].value_counts()[:len(lane_df)]
                     champ_str = ''
                     for index, v in champ.items():
                         champ_str += f'**{index}** : {v}  '
-                    embed.add_field(name=f"**{lane}**", value=f"**Games** : {len(lane_df)}")
+                    embed.add_field(name=f"**{lane}**", value=f"**Games** : {len(merged_df)}")
                     embed.add_field(name="Winrate", value=f"{winrate:.3g}")
                     embed.add_field(name="KDA", value=f"{average_kda:.3g}")
                     # embed.add_field(name="Wards", value=f"{average_vision_ward:.3g}")
                     embed.add_field(name="\nFavorite Champions", value=f"{champ_str}\n\u200b", inline=False)
-            average_kill = str(sum(summoner_df["CHAMPIONS_KILLED"].astype(int)) / len(summoner_df))
-            average_death = str(sum(summoner_df["NUM_DEATHS"].astype(int)) / len(summoner_df))
-            average_assist = str(sum(summoner_df["ASSISTS"].astype(int)) / len(summoner_df))
+            average_kill = str(sum(stats_df["kills"].astype(int)) / len(stats_df))
+            average_death = str(sum(stats_df["deaths"].astype(int)) / len(stats_df))
+            average_assist = str(sum(stats_df["assists"].astype(int)) / len(stats_df))
             if average_death == '0.0':
                 average_death = '1.0'
             average_kda = (float(average_kill) + float(average_assist)) / float(average_death)
-            winrate = sum(summoner_df["result"] == 'Win') / len(summoner_df) * 100
-            average_vision_ward = sum(summoner_df["VISION_WARDS_BOUGHT_IN_GAME"].astype(int)) / len(summoner_df)
+            winrate = sum(stats_df["win"]) / len(stats_df) * 100
+            # average_vision_ward = sum(summoner_df["VISION_WARDS_BOUGHT_IN_GAME"].astype(int)) / len(summoner_df)
             embed.add_field(name="Total Winrate", value=f"{winrate:.3g}")
             embed.add_field(name="KDA", value=f"{average_kda:.3g}")
-            embed.add_field(name="Wards", value=f"{average_vision_ward:.3g}")
+            # embed.add_field(name="Wards", value=f"{average_vision_ward:.3g}")
             await interaction.followup.send(embed=embed)
         else:
             await interaction.followup.send(content="Log file not found")

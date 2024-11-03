@@ -3,6 +3,7 @@ import os
 import time
 import image_gen
 from utils import get_keys
+from datetime import datetime
 
 
 class ReplayReader():
@@ -12,7 +13,7 @@ class ReplayReader():
         f = open('data/versions.json', 'r')
         json_dict = json.load(f)
         self.version = json_dict[0]
-        self.game_df = bot_functions.game.query(f'id == {replay_id}')
+        self.game_df = bot_functions.df_game.query(f'id == {replay_id}').iloc[0]
         self.player_df = bot_functions.df_player
         self.team_df = bot_functions.df_team.query(f'gameId == {replay_id}')
         self.bans_df = bot_functions.df_bans.query(f'gameId == {replay_id}')
@@ -40,13 +41,14 @@ class ReplayReader():
         :return:
         """
         player_list = []
-        for p in self.participants_df:
+        for i, p in self.participants_df.iterrows():
             puuid = p['puuid']
             pid = p['participantId']
-            player_dict = self.stats_df.query(f'participantId == {pid}')
-            items = []
-            for i in range(7):
-                items.append(self.stats_df[f"item{i}"])
+            player_dict = self.stats_df.query(f'participantId == {pid}').iloc[0]
+            player_dict["runes"] = [0]
+            items = player_dict[[f"item{i}" for i in range(7)]]
+            player_dict['position'] = p['position']
+            player_dict['SKIN'] = p['championName']
             player_dict['puuid'] = puuid
             player_dict["game_id"] = self.match_id
             player_dict["result"] = 'Win' if player_dict["win"] else 'Lose'
@@ -54,7 +56,7 @@ class ReplayReader():
             player_dict["cs"] = str(int(player_dict["totalMinionsKilled"]) + int(player_dict["neutralMinionsKilled"]))
             player_dict["csm"] = int(player_dict["cs"]) / (self.game_time / 60)
             player_dict["game_time"] = self.game_time
-            player_dict["runes"] = [[player_dict["perk0"], player_dict["perk1"], player_dict["perk2"]], [player_dict["perk3"], player_dict["perk4"]]]  # smaller runes
+            player_dict["runes"] = [[player_dict["perk0"], player_dict["perk1"], player_dict["perk2"]], [player_dict["perk3"], player_dict["perk4"]]]
             player_dict["items"] = items
             player_dict['version'] = self.version
             player_list.append(player_dict)
@@ -65,14 +67,14 @@ class ReplayReader():
     def get_team_kdas(self):
         winner_kda = [0, 0, 0]
         loser_kda = [0, 0, 0]
-        for player_stats in self.stats:
-            if player_stats["WIN"] == "Win":
+        for i, player_stats in self.stats_df.iterrows():
+            if player_stats["win"]:
                 kda = winner_kda
-            elif player_stats["WIN"] == "Fail":
+            else:
                 kda = loser_kda
-            kda[0] += int(player_stats["CHAMPIONS_KILLED"])
-            kda[1] += int(player_stats["NUM_DEATHS"])
-            kda[2] += int(player_stats["ASSISTS"])
+            kda[0] += int(player_stats["kills"])
+            kda[1] += int(player_stats["deaths"])
+            kda[2] += int(player_stats["assists"])
         return f"{winner_kda[0]}/{winner_kda[1]}/{winner_kda[2]}", f"{loser_kda[0]}/{loser_kda[1]}/{loser_kda[2]}"
 
     def generate_game_img(self, d):
@@ -83,8 +85,10 @@ class ReplayReader():
                 list_to_mod = losers
             elif player["result"] == "Win":
                 list_to_mod = winners
-            player['gamename'] = self.player_df.loc[player['puuid']]['gameName']
-            player['tag'] = self.player_df.loc[player['puuid']]['tagLine']
+            player['gamename'] = self.player_df[self.player_df['puuid'] == player['puuid']]['gameName'].iloc[0]
+            player['tag'] = self.player_df[self.player_df['puuid'] == player['puuid']]['tagLine'].iloc[0]
             list_to_mod.append(player)
+        winners.sort(key=lambda x: ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'].index(x['position']))
+        losers.sort(key=lambda x: ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'].index(x['position']))
         win_kda, lose_kda = self.get_team_kdas()
         self.image_gen.generate_game_img([[win_kda, lose_kda], winners, losers, "Summoner's Rift", self.game_time_str], self.match_id)

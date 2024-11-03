@@ -30,12 +30,30 @@ for path in req_directories:
         os.mkdir(path)
 
 db = DB()
+max_id = 477332089
 
 
-@tasks.loop(minutes=1)
+@tasks.loop(minutes=2)
 async def db_sync():
+    global max_id
+    # 前回の同期時の最大IDを保持
+    previous_max_id = max_id
+
+    # データベースから最新のデータを取得
     bot_funcs.df_game, bot_funcs.df_player, bot_funcs.df_team, bot_funcs.df_bans, bot_funcs.df_stats, bot_funcs.df_participants = db.get_tables()
-    await bot_funcs.result()
+
+    # 新しいIDが追加された場合
+    if bot_funcs.df_game['id'].max() > previous_max_id:
+        # max_idを更新
+        max_id = bot_funcs.df_game['id'].max()
+
+        # 新しく追加されたIDを取得
+        new_ids = bot_funcs.df_game['id'][bot_funcs.df_game['id'] > previous_max_id].tolist()
+
+        # 新しく追加されたIDごとに処理を行う
+        for new_id in new_ids:
+            print(f"New game ID: {new_id}")  # ここに新しいIDに対する処理を追加
+            await bot_funcs.result(id=new_id)
 
 
 @tasks.loop(hours=1)
