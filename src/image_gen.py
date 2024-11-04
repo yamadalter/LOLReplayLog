@@ -92,11 +92,17 @@ class ImageGen:
         self.current_pixel = (0, 0)
         self.text(text=f"{player_list[3]} ({player_list[4]})")
         self.current_pixel = (0, self.current_pixel[1] + 20)
-        self.text(text=f"Winners ({player_list[0][0]})", font=self.large_font, y=40)
+        self.text(text=f"Winners ({player_list[0][0]}) side:{player_list[5][0]}", font=self.large_font, y=40)
+        self.current_pixel = (400, self.current_pixel[1])
+        for ban in player_list[6][0]:
+            self.resize_paste(self.get_champ_icon(ban), (25, 25), center="y")
         self.current_pixel = (0, self.current_pixel[1] + 50)
         for winner in player_list[1]:
             self.generate_player_imgs(winner)
-        self.text(text=f"Losers ({player_list[0][1]})", font=self.large_font, y=40)
+        self.text(text=f"Losers ({player_list[0][1]}) side:{player_list[5][1]}", font=self.large_font, y=40)
+        self.current_pixel = (400, self.current_pixel[1])
+        for ban in player_list[6][1]:
+            self.resize_paste(self.get_champ_icon(ban), (25, 25), center="y")
         self.current_pixel = (0, self.current_pixel[1] + 50)
         for loser in player_list[2]:
             self.generate_player_imgs(loser)

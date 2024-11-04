@@ -22,8 +22,6 @@ class BotFunctions():
         super().__init__()
         config = configparser.ConfigParser()
         config.read('config.ini')
-        json_open = open(TierData, 'r', encoding='utf-8')
-        self.tierdic = json.load(json_open)
         if os.path.exists(LinkDataJSON):
             json_open = open(LinkDataJSON, 'r', encoding='utf-8')
             self.dic = json.load(json_open)

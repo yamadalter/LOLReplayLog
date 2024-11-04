@@ -30,30 +30,28 @@ for path in req_directories:
         os.mkdir(path)
 
 db = DB()
-max_id = 477332089
+id_list = []
 
 
 @tasks.loop(minutes=2)
 async def db_sync():
-    global max_id
-    # 前回の同期時の最大IDを保持
-    previous_max_id = max_id
-
+    global id_list
     # データベースから最新のデータを取得
     bot_funcs.df_game, bot_funcs.df_player, bot_funcs.df_team, bot_funcs.df_bans, bot_funcs.df_stats, bot_funcs.df_participants = db.get_tables()
 
+    previous_ids = id_list
+    id_list = bot_funcs.df_game['id'].tolist()
+    new_ids = []
     # 新しいIDが追加された場合
-    if bot_funcs.df_game['id'].max() > previous_max_id:
-        # max_idを更新
-        max_id = bot_funcs.df_game['id'].max()
-
+    for i in id_list:
         # 新しく追加されたIDを取得
-        new_ids = bot_funcs.df_game['id'][bot_funcs.df_game['id'] > previous_max_id].tolist()
+        if i not in previous_ids:
+            new_ids.append(i)
 
-        # 新しく追加されたIDごとに処理を行う
-        for new_id in new_ids:
-            print(f"New game ID: {new_id}")  # ここに新しいIDに対する処理を追加
-            await bot_funcs.result(id=new_id)
+    # 新しく追加されたIDごとに処理を行う
+    for new_id in new_ids:
+        print(f"New game ID: {new_id}")  # ここに新しいIDに対する処理を追加
+        await bot_funcs.result(id=new_id)
 
 
 @tasks.loop(hours=1)
@@ -63,11 +61,16 @@ async def update_version():
 
 @client.event
 async def on_ready():
-
+    global id_list
     print(f"Logged in as {client.user}, ID {client.user.id}")
 
     # アクティビティを設定
     await client.change_presence(activity=Game(name='produced by:yamadalter'))
+
+    print("DB check start")
+
+    bot_funcs.df_game, bot_funcs.df_player, bot_funcs.df_team, bot_funcs.df_bans, bot_funcs.df_stats, bot_funcs.df_participants = db.get_tables()
+    id_list = bot_funcs.df_game['id'].tolist()
 
     # スラッシュコマンドを同期
     await tree.sync()
@@ -104,10 +107,10 @@ async def detail(interaction: Interaction, member: discord.Member = None):
     await bot_funcs.detail(interaction, member)
 
 
-@tree.command(name='bestgame', description='KDAの一番よかった試合を振り返ります')
-async def bestgame(interaction: Interaction, member: discord.Member = None):
-    await interaction.response.defer(thinking=True)
-    await bot_funcs.bestgame(interaction, member)
+# @tree.command(name='bestgame', description='KDAの一番よかった試合を振り返ります')
+# async def bestgame(interaction: Interaction, member: discord.Member = None):
+#     await interaction.response.defer(thinking=True)
+#     await bot_funcs.bestgame(interaction, member)
 
 
 @tree.command(name='update', description='version upを行います')

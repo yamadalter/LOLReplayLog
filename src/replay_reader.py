@@ -45,7 +45,7 @@ class ReplayReader():
             puuid = p['puuid']
             pid = p['participantId']
             player_dict = self.stats_df.query(f'participantId == {pid}').iloc[0]
-            player_dict["runes"] = [0]
+            player_dict['side'] = p['side']
             items = player_dict[[f"item{i}" for i in range(7)]]
             player_dict['position'] = p['position']
             player_dict['SKIN'] = p['championName']
@@ -67,7 +67,7 @@ class ReplayReader():
     def get_team_kdas(self):
         winner_kda = [0, 0, 0]
         loser_kda = [0, 0, 0]
-        for i, player_stats in self.stats_df.iterrows():
+        for _, player_stats in self.stats_df.iterrows():
             if player_stats["win"]:
                 kda = winner_kda
             else:
@@ -77,18 +77,35 @@ class ReplayReader():
             kda[2] += int(player_stats["assists"])
         return f"{winner_kda[0]}/{winner_kda[1]}/{winner_kda[2]}", f"{loser_kda[0]}/{loser_kda[1]}/{loser_kda[2]}"
 
+    def get_bans(self):
+        win_bans = []
+        lose_bans = []
+        for _, team in self.team_df.iterrows():
+            teamid = team['teamId']
+            bans = self.bans_df.query(f'teamId == {teamid}')
+            if team['isWinner'] == 'Win':
+                for _, ban in bans.iterrows():
+                    win_bans.append(ban['championName'])
+            else:
+                for _, ban in bans.iterrows():
+                    lose_bans.append(ban['championName'])
+        return win_bans, lose_bans
+
     def generate_game_img(self, d):
         winners = []  # [KEYSTONE_ID, PERK_SUB_STYLE, champ, name, KDA, [items]]
         losers = []
         for player in self.get_player_stats():
             if player["result"] == "Lose":
                 list_to_mod = losers
+                lose_side = player['side']
             elif player["result"] == "Win":
                 list_to_mod = winners
+                win_side = player['side']
             player['gamename'] = self.player_df[self.player_df['puuid'] == player['puuid']]['gameName'].iloc[0]
             player['tag'] = self.player_df[self.player_df['puuid'] == player['puuid']]['tagLine'].iloc[0]
             list_to_mod.append(player)
         winners.sort(key=lambda x: ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'].index(x['position']))
         losers.sort(key=lambda x: ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'].index(x['position']))
         win_kda, lose_kda = self.get_team_kdas()
-        self.image_gen.generate_game_img([[win_kda, lose_kda], winners, losers, "Summoner's Rift", self.game_time_str], self.match_id)
+        win_bans, lose_bans = self.get_bans()
+        self.image_gen.generate_game_img([[win_kda, lose_kda], winners, losers, "Summoner's Rift", self.game_time_str, [win_side, lose_side], [win_bans, lose_bans]], self.match_id)
