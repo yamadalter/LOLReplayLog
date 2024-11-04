@@ -64,21 +64,21 @@ class BotFunctions():
         # link id
         discord_id = str(interaction.user.id) if member is None else str(member.id)
         if discord_id in self.dic:
-            await interaction.followup.send(content=f'<@{discord_id}> is already linked')
+            await interaction.followup.send(content=f'<@{discord_id}> is already linked', ephemeral=True)
             return
         if (riotid is None) or (tag is None):
             await interaction.followup.send(content='/link gamename #tag')
             return
         res = self.watcher.search_by_riot_id(riotid, tag)
         if res is None:
-            await interaction.followup.send(content=f'{riotid} #{tag} has not found')
+            await interaction.followup.send(content=f'{riotid} #{tag} has not found', ephemeral=True)
             return
         else:
             puuid = res['puuid']
             gamename = res['gameName']
             tag = res['tagLine']
             # sn = self.watcher.search_puuid(puuid)['name']
-            await interaction.followup.send(content='Successfully linked!')
+            await interaction.followup.send(content='Successfully linked!', ephemeral=True)
             # set rating
             self.dic[discord_id] = {
                 'puuid': puuid,
@@ -90,7 +90,7 @@ class BotFunctions():
     async def unlink(self, interaction, member=None):
         discord_id = str(interaction.user.id) if member is None else str(member.id)
         self.dic.pop(discord_id)
-        await interaction.response.send_message(content=f'<@{discord_id}> has been unlinked')
+        await interaction.response.send_message(content=f'<@{discord_id}> has been unlinked', ephemeral=True)
 
     async def stats(self, interaction, member):
         discord_id = str(interaction.user.id) if member is None else str(member.id)
@@ -98,7 +98,7 @@ class BotFunctions():
         tag = self.dic[discord_id]['tag']
         puuid = self.df_player.query('gameName == @gamename and tagLine == @tag')['puuid'].values[0]
         if puuid is None:
-            await interaction.followup.send(content="Summoner is not linked")
+            await interaction.followup.send(content="Summoner is not linked", ephemeral=True)
             return
         name = f"<@{discord_id}>"
         avator = await self.user(discord_id)
@@ -165,7 +165,7 @@ class BotFunctions():
             embed.add_field(name="\nRecent Games", value=f"{recent}", inline=False)
             await interaction.followup.send(file=file, embed=embed)
         else:
-            await interaction.followup.send(content="Log file not found")
+            await interaction.followup.send(content="Log file not found", ephemeral=True)
             return
 
     async def bestgame(self, interaction, member):
@@ -200,7 +200,7 @@ class BotFunctions():
         tag = self.dic[discord_id]['tag']
         puuid = self.df_player.query('gameName == @gamename and tagLine == @tag')['puuid'].values[0]
         if puuid is None:
-            await interaction.followup.send(content="Summoner is not linked")
+            await interaction.followup.send(content="Summoner is not linked", ephemeral=True)
             return
         name = f"<@{discord_id}>"
         avator = await self.user(discord_id)
@@ -209,7 +209,7 @@ class BotFunctions():
             stats_df = self.df_stats[self.df_stats["puuid"] == puuid]
             p_df = self.df_participants[self.df_participants["puuid"] == puuid]
             if len(stats_df) < 1:
-                await interaction.followup.send(content="Log not found")
+                await interaction.followup.send(content="Log not found", ephemeral=True)
                 return
             if avator is not None and avator.avatar is not None:
                 user_icon = avator.avatar.url
@@ -254,17 +254,17 @@ class BotFunctions():
             # embed.add_field(name="Wards", value=f"{average_vision_ward:.3g}")
             await interaction.followup.send(embed=embed)
         else:
-            await interaction.followup.send(content="Log file not found")
+            await interaction.followup.send(content="Log file not found", ephemeral=True)
             return
 
     async def rename(self, interaction, gamename, tag, member=None):
         discord_id = str(interaction.user.id) if member is None else str(member.id)
         if (gamename is None) or (tag is None):
-            await interaction.followup.send(content='/link gamename #tag')
+            await interaction.followup.send(content='/link gamename #tag', ephemeral=True)
             return
         res = self.watcher.search_by_riot_id(gamename, tag)
         if res is None:
-            await interaction.followup.send(content=f'{gamename} #{tag} has not found')
+            await interaction.followup.send(content=f'{gamename} #{tag} has not found', ephemeral=True)
             return
         else:
             gamename = res['gameName']
@@ -272,7 +272,7 @@ class BotFunctions():
             self.dic[discord_id]['gamename'] = gamename
             self.dic[discord_id]['tag'] = tag
             self.save_dic2json()
-            await interaction.followup.send(content=f'Success rename {gamename} #{tag}')
+            await interaction.followup.send(content=f'Success rename {gamename} #{tag}', ephemeral=True)
             return
 
     async def update(self, interaction):
