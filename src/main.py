@@ -80,7 +80,7 @@ async def on_ready():
 
 @tree.command(name='link', description='DiscordとRiot IDを紐づけます')
 async def link(interaction: Interaction, riotid: str, tag: str, member: discord.Member = None):
-    await interaction.response.defer(thinking=True)
+    # await interaction.response.defer(thinking=True)
     await bot_funcs.link(interaction, riotid, tag, member)
 
 
@@ -91,19 +91,19 @@ async def unlink(interaction: Interaction, member: discord.Member = None):
 
 @tree.command(name='rename', description='紐づけしているRiot idを変更します')
 async def rename(interaction: Interaction, riotid: str, tag: str, member: discord.Member = None):
-    await interaction.response.defer(thinking=True)
+    # await interaction.response.defer(thinking=True)
     await bot_funcs.rename(interaction, riotid, tag, member)
 
 
 @tree.command(name='stats', description='戦績を確認します')
 async def stats(interaction: Interaction, member: discord.Member = None):
-    await interaction.response.defer(thinking=True)
+    # await interaction.response.defer(thinking=True)
     await bot_funcs.stats(interaction, member)
 
 
 @tree.command(name='detail', description='戦績の詳細を確認します')
 async def detail(interaction: Interaction, member: discord.Member = None):
-    await interaction.response.defer(thinking=True)
+    # await interaction.response.defer(thinking=True)
     await bot_funcs.detail(interaction, member)
 
 

@@ -64,21 +64,21 @@ class BotFunctions():
         # link id
         discord_id = str(interaction.user.id) if member is None else str(member.id)
         if discord_id in self.dic:
-            await interaction.followup.send(content=f'<@{discord_id}> is already linked', ephemeral=True)
+            await interaction.response.send_message(content=f'<@{discord_id}> is already linked', ephemeral=True)
             return
         if (riotid is None) or (tag is None):
-            await interaction.followup.send(content='/link gamename #tag')
+            await interaction.response.send_message(content='/link gamename #tag')
             return
         res = self.watcher.search_by_riot_id(riotid, tag)
         if res is None:
-            await interaction.followup.send(content=f'{riotid} #{tag} has not found', ephemeral=True)
+            await interaction.response.send_message(content=f'{riotid} #{tag} has not found', ephemeral=True)
             return
         else:
             puuid = res['puuid']
             gamename = res['gameName']
             tag = res['tagLine']
             # sn = self.watcher.search_puuid(puuid)['name']
-            await interaction.followup.send(content='Successfully linked!', ephemeral=True)
+            await interaction.response.send_message(content='Successfully linked!', ephemeral=True)
             # set rating
             self.dic[discord_id] = {
                 'puuid': puuid,
@@ -94,11 +94,17 @@ class BotFunctions():
 
     async def stats(self, interaction, member):
         discord_id = str(interaction.user.id) if member is None else str(member.id)
-        gamename = self.dic[discord_id]['gamename']
-        tag = self.dic[discord_id]['tag']
-        puuid = self.df_player.query('gameName == @gamename and tagLine == @tag')['puuid'].values[0]
-        if puuid is None:
-            await interaction.followup.send(content="Summoner is not linked", ephemeral=True)
+        if discord_id in self.dic:
+            gamename = self.dic[discord_id]['gamename']
+            tag = self.dic[discord_id]['tag']
+        else:
+            await interaction.response.send_message(content="Summoner is not linked", ephemeral=True)
+            return
+        puuid = self.df_player.query('gameName == @gamename and tagLine == @tag')['puuid']
+        if len(puuid) > 0:
+            puuid = puuid.values[0]
+        else:
+            await interaction.response.send_message(content="Log not found", ephemeral=True)
             return
         name = f"<@{discord_id}>"
         avator = await self.user(discord_id)
@@ -107,7 +113,7 @@ class BotFunctions():
             stats_df = self.df_stats[self.df_stats["puuid"] == puuid]
             p_df = self.df_participants[self.df_participants["puuid"] == puuid]
             if len(stats_df) < 1:
-                await interaction.followup.send(content="Log not found")
+                await interaction.response.send_message(content="Log not found", ephemeral=True)
                 return
             average_kill = str(sum(stats_df["kills"].astype(int)) / len(stats_df))
             average_death = str(sum(stats_df["deaths"].astype(int)) / len(stats_df))
@@ -163,22 +169,22 @@ class BotFunctions():
             embed.add_field(name="\nRole", value=f"{role_str}", inline=False)
             embed.add_field(name="\nFavorite Champions", value=f"{champ_str}", inline=False)
             embed.add_field(name="\nRecent Games", value=f"{recent}", inline=False)
-            await interaction.followup.send(file=file, embed=embed)
+            await interaction.response.send_message(file=file, embed=embed)
         else:
-            await interaction.followup.send(content="Log file not found", ephemeral=True)
+            await interaction.response.send_message(content="Log file not found", ephemeral=True)
             return
 
     async def bestgame(self, interaction, member):
         discord_id = str(interaction.user.id) if member is None else str(member.id)
         summoner_name = self.dic[discord_id]['sn']
         if summoner_name is None:
-            await interaction.followup.send(content="Summoner name is not linked")
+            await interaction.response.send_message(content="Summoner name is not linked")
             return
         name = f"<@{discord_id}>"
         if self.logdf is not None:
             summoner_df = self.logdf[self.logdf["NAME"] == summoner_name]
             if len(summoner_df) < 1:
-                await interaction.followup.send(content="Log not found")
+                await interaction.response.send_message(content="Log not found")
                 return
             kill = summoner_df["CHAMPIONS_KILLED"].astype(int) / len(summoner_df)
             death = summoner_df["NUM_DEATHS"].astype(int) / len(summoner_df)
@@ -187,20 +193,26 @@ class BotFunctions():
             max_index = np.argmax(kda)
             replay_id = list(summoner_df["game_id"])[max_index]
             if not os.path.exists(f'data/match_imgs/{replay_id}.png'):
-                await interaction.followup.send(content="Log not found")
+                await interaction.response.send_message(content="Log not found")
                 return
             embed = Embed(title="Best Game", description=f"{name}", color=Colour.blurple())
             file = File(f'data/match_imgs/{replay_id}.png', filename="image.png")
             embed.set_image(url="attachment://image.png")
-            await interaction.followup.send.reply(file=file, embed=embed)
+            await interaction.response.send_message(file=file, embed=embed)
 
     async def detail(self, interaction, member):
         discord_id = str(interaction.user.id) if member is None else str(member.id)
-        gamename = self.dic[discord_id]['gamename']
-        tag = self.dic[discord_id]['tag']
-        puuid = self.df_player.query('gameName == @gamename and tagLine == @tag')['puuid'].values[0]
-        if puuid is None:
-            await interaction.followup.send(content="Summoner is not linked", ephemeral=True)
+        if discord_id in self.dic:
+            gamename = self.dic[discord_id]['gamename']
+            tag = self.dic[discord_id]['tag']
+        else:
+            await interaction.response.send_message(content="Summoner is not linked", ephemeral=True)
+            return
+        puuid = self.df_player.query('gameName == @gamename and tagLine == @tag')['puuid']
+        if len(puuid) > 0:
+            puuid = puuid.values[0]
+        else:
+            await interaction.response.send_message(content="Log not found", ephemeral=True)
             return
         name = f"<@{discord_id}>"
         avator = await self.user(discord_id)
@@ -209,7 +221,7 @@ class BotFunctions():
             stats_df = self.df_stats[self.df_stats["puuid"] == puuid]
             p_df = self.df_participants[self.df_participants["puuid"] == puuid]
             if len(stats_df) < 1:
-                await interaction.followup.send(content="Log not found", ephemeral=True)
+                await interaction.response.send_message(content="Log not found", ephemeral=True)
                 return
             if avator is not None and avator.avatar is not None:
                 user_icon = avator.avatar.url
@@ -252,19 +264,19 @@ class BotFunctions():
             embed.add_field(name="Total Winrate", value=f"{winrate:.3g}")
             embed.add_field(name="KDA", value=f"{average_kda:.3g}")
             # embed.add_field(name="Wards", value=f"{average_vision_ward:.3g}")
-            await interaction.followup.send(embed=embed)
+            await interaction.response.send_message(embed=embed)
         else:
-            await interaction.followup.send(content="Log file not found", ephemeral=True)
+            await interaction.response.send_message(content="Log file not found", ephemeral=True)
             return
 
     async def rename(self, interaction, gamename, tag, member=None):
         discord_id = str(interaction.user.id) if member is None else str(member.id)
         if (gamename is None) or (tag is None):
-            await interaction.followup.send(content='/link gamename #tag', ephemeral=True)
+            await interaction.response.send_message(content='/link gamename #tag', ephemeral=True)
             return
         res = self.watcher.search_by_riot_id(gamename, tag)
         if res is None:
-            await interaction.followup.send(content=f'{gamename} #{tag} has not found', ephemeral=True)
+            await interaction.response.send_message(content=f'{gamename} #{tag} has not found', ephemeral=True)
             return
         else:
             gamename = res['gameName']
@@ -272,7 +284,7 @@ class BotFunctions():
             self.dic[discord_id]['gamename'] = gamename
             self.dic[discord_id]['tag'] = tag
             self.save_dic2json()
-            await interaction.followup.send(content=f'Success rename {gamename} #{tag}', ephemeral=True)
+            await interaction.response.send_message(content=f'Success rename {gamename} #{tag}', ephemeral=True)
             return
 
     async def update(self, interaction):
