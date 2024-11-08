@@ -115,37 +115,12 @@ class BotFunctions():
             if len(stats_df) < 1:
                 await interaction.response.send_message(content="Log not found", ephemeral=True)
                 return
-            average_kill = str(sum(stats_df["kills"].astype(int)) / len(stats_df))
-            average_death = str(sum(stats_df["deaths"].astype(int)) / len(stats_df))
-            if average_death == '0.0':
-                average_death = '1.0'
-            average_assist = str(sum(stats_df["assists"].astype(int)) / len(stats_df))
-            average_kda = (float(average_kill) + float(average_assist)) / float(average_death)
             winrate = sum(stats_df["win"]) / len(stats_df) * 100
             if len(p_df) > 4:
-                role = p_df['position'].value_counts()
                 champ = p_df["championName"].value_counts()[:5]
             else:
-                role = p_df['position'].value_counts()[:len(p_df)]
                 champ = p_df["championName"].value_counts()[:len(p_df)]
             famouschamp = champ.keys()[0]
-            role_str = ''
-            for index, v in role.items():
-                role_str += f'**{index}** : {v}   '
-            champ_str = ''
-            for index, v in champ.items():
-                champ_str += f'**{index}** : {v}  '
-            if len(stats_df) > 10:
-                games = 10
-            else:
-                games = len(stats_df)
-            recent = '** '
-            for _, row in stats_df[:games][::-1].iterrows():
-                if row["win"]:
-                    recent += ":blue_square: "
-                else:
-                    recent += ":red_square: "
-            recent += '** '
             if winrate > 60:
                 stats_color = 0x0099E1
             elif winrate > 50:
@@ -154,22 +129,18 @@ class BotFunctions():
                 stats_color = 0xF8C300
             else:
                 stats_color = 0xFD0061
-            file = File(f'img/champion/{famouschamp}.png', filename='champ.png')
-            embed = Embed(title="Stats", description=f"**{name}**\nTotal Games {len(stats_df)}\n", color=stats_color)
+            file1 = File(f'img/champion/{famouschamp}.png', filename='champ.png')
+            embed = Embed(title="Stats", description=f"**{name}**\n", color=stats_color)
             if (avator is not None) and (avator.avatar is not None):
                 user_icon = avator.avatar.url
             else:
                 user_icon = ""
             embed.set_author(name=f'{gamename} #{tag}', icon_url=user_icon)
             embed.set_thumbnail(url="attachment://champ.png")
-            # rate = self.dic[discord_id]['mu'][-1]
-            # embed.add_field(name="Rating", value=f"{int(rate)}", inline=False)
-            embed.add_field(name="Winrate", value=f"{winrate:.3g}")
-            embed.add_field(name="KDA", value=f"{average_kda:.3g}")
-            embed.add_field(name="\nRole", value=f"{role_str}", inline=False)
-            embed.add_field(name="\nFavorite Champions", value=f"{champ_str}", inline=False)
-            embed.add_field(name="\nRecent Games", value=f"{recent}", inline=False)
-            await interaction.response.send_message(file=file, embed=embed)
+            self.image_gen.generate_stats_img([self.df_game, self.df_player, self.df_stats, self.df_participants], puuid)
+            file2 = File(f'data/stats_imgs/{puuid}.png', filename="image.png")
+            embed.set_image(url="attachment://image.png")
+            await interaction.response.send_message(files=[file1, file2], embed=embed)
         else:
             await interaction.response.send_message(content="Log file not found", ephemeral=True)
             return
