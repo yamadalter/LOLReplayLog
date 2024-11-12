@@ -7,7 +7,7 @@ import scipy.stats
 from pycirclize import Circos
 import matplotlib as mpl
 import io
-mpl.rcParams['figure.facecolor'] = '#000000'
+mpl.rcParams['figure.facecolor'] = '#010a13'
 mpl.rcParams['axes.labelcolor'] = 'white'
 mpl.rcParams['axes.titlecolor'] = 'white'
 mpl.rcParams['xtick.color'] = 'white'
@@ -26,9 +26,11 @@ class ImageGen:
         self.current_image = None
         self.draw = None
         self.current_pixel = (0, 0)
-        self.large_font = ImageFont.truetype("data/NotoSansJP-Thin.otf", 24)
-        self.normal_font = ImageFont.truetype("data/NotoSansJP-Thin.otf", 16)
-
+        self.large_font = ImageFont.truetype("font/BeaufortforLOL-Bold.ttf", 24)
+        self.normal_font = ImageFont.truetype("font/BeaufortforLOL-Regular.ttf", 16)
+        self.large_jp_font = ImageFont.truetype("font/RocknRollOne-Regular.ttf", 24)
+        self.normal_jp_font = ImageFont.truetype("font/RocknRollOne-Regular.ttf", 16)
+    
     def text(self, text, font=None, fill="white", x=60, y=30, direction="right"):
         if font is None:
             font = self.normal_font
@@ -41,7 +43,7 @@ class ImageGen:
         elif direction == "down":
             self.current_pixel = (self.current_pixel[0], self.current_pixel[1] + y + y_mod)
 
-    def resize_paste(self, img, size, center="", mvmt="right", space=10):
+    def resize_paste(self, img, size, center="", mvmt="right", space=10, mask=None):
         if img is None:  # when does this happen ?
             pass
         else:
@@ -51,7 +53,9 @@ class ImageGen:
                 x += int(size[0]*.5)
             if "y" in center:
                 y += int(size[1]*.5)
-            self.current_image.paste(img.resize(size), (x, y))
+            if mask is not None:
+                mask = mask.resize(size)
+            self.current_image.paste(img.resize(size), (x, y), mask=mask)
             if mvmt == "right":
                 self.current_pixel = (self.current_pixel[0] + size[0] + space, self.current_pixel[1])
             elif mvmt == "down":
@@ -78,10 +82,12 @@ class ImageGen:
             return Image.open(f"img/item/{item}.png")
 
     def generate_player_imgs(self, player):
-        self.resize_paste(self.get_rune_img(player["perk0"], 0), (40, 40), space=2)
-        self.resize_paste(self.get_style_img(player["perkSubStyle"]), (20, 20), center="y")
+        rune = self.get_rune_img(player["perk0"], 0)
+        self.resize_paste(rune, (40, 40), space=2, mask=rune)
+        style = self.get_style_img(player["perkSubStyle"])
+        self.resize_paste(style, (20, 20), center="y", mask=style)
         self.resize_paste(self.get_champ_icon(player["SKIN"]), (40, 40))
-        self.text(text=f'{player["gamename"]}', x=250)
+        self.text(text=f'{player["gamename"]}', x=250, font=self.normal_jp_font)
         self.text(text=player["kda"], x=75)
         self.current_pixel = (self.current_pixel[0], self.current_pixel[1] + 5)
         for item in player["items"]:
@@ -98,19 +104,19 @@ class ImageGen:
         # [[winner kda, loser kda], Winners, Losers, map, timestamp]
         # in each team will be a list of players, containing [KEYSTONE_ID, PERK_SUB_STYLE, champ, name, KDA, minions_killed, [items], gold_earned]
         additional_pixels = (len(player_list[1]) + len(player_list[2])) * 43  # add another 45 pts for each player
-        self.current_image = Image.new('RGBA', (775, 150 + additional_pixels), color='#000000')
+        self.current_image = Image.new('RGBA', (775, 220 + additional_pixels), color='#010a13')
         self.draw = ImageDraw.Draw(self.current_image)
         self.current_pixel = (0, 0)
         self.text(text=f"{player_list[3]} ({player_list[4]})")
         self.current_pixel = (0, self.current_pixel[1] + 20)
-        self.text(text=f"Winners ({player_list[0][0]}) side:{player_list[5][0]}", font=self.large_font, y=40)
+        self.text(text=f"Winners ({player_list[0][0]}) side: {player_list[5][0]}", font=self.large_font, y=40)
         self.current_pixel = (400, self.current_pixel[1])
         for ban in player_list[6][0]:
             self.resize_paste(self.get_champ_icon(ban), (25, 25), center="y")
         self.current_pixel = (0, self.current_pixel[1] + 50)
         for winner in player_list[1]:
             self.generate_player_imgs(winner)
-        self.text(text=f"Losers ({player_list[0][1]}) side:{player_list[5][1]}", font=self.large_font, y=40)
+        self.text(text=f"Losers ({player_list[0][1]}) side: {player_list[5][1]}", font=self.large_font, y=40)
         self.current_pixel = (400, self.current_pixel[1])
         for ban in player_list[6][1]:
             self.resize_paste(self.get_champ_icon(ban), (25, 25), center="y")
@@ -180,23 +186,19 @@ class ImageGen:
         gamename = df_player[df_player['puuid'] == puuid]['gameName'].iloc[0]
         tag = df_player[df_player['puuid'] == puuid]['tagLine'].iloc[0]
 
-        self.current_image = Image.new('RGBA', (575, 500), color='#000000')
+        self.current_image = Image.new('RGBA', (575, 485), color='#010a13')
         self.draw = ImageDraw.Draw(self.current_image)
-        self.current_pixel = (40, 0)
-
-        # サモナーネームとタグの描画
-        self.text(text=f"{gamename} #{tag}", font=self.large_font)
 
         # ゲーム情報、勝率、KDA の描画
-        self.current_pixel = (20, self.current_pixel[1] + 50)
-        self.text(text='All Game', font=self.large_font)
+        self.current_pixel = (20, 0)
+        self.text(text='All Game', font=self.large_font, fill='#e79500')
         kda = sum(df['kills'] + df['assists']) / np.clip(sum(df['deaths']), 1, None)
         win = sum(df['win']) / n
         y = self.current_pixel[1] + 35
         self.current_pixel = (40, y)
-        self.text(text='Games', font=self.large_font)
+        self.text(text='Games', font=self.large_font, fill='#e79500')
         self.current_pixel = (150, y)
-        self.text(text='Winrate', font=self.large_font)
+        self.text(text='Winrate', font=self.large_font, fill='#e79500')
         self.current_pixel = (65, y + 30)
         self.text(text=f'{n}', font=self.large_font)
         self.current_pixel = (160, y + 30)
@@ -239,12 +241,12 @@ class ImageGen:
                 kda += np.mean(((scipy.stats.zscore(kdas) + 1) / 2)[flag]) * sum(flag) / n
                 obj += np.mean(((scipy.stats.zscore(objs) + 1) / 2)[flag]) * sum(flag) / n
         label_list = ['KDA', 'CS', 'VISION', 'OBJECT', 'DMG']
-        acc_list = [kda, cs, vision, obj, dmg]
+        acc_list = np.clip([kda, cs, vision, obj, dmg], 0, 1)
         rader_df = pd.DataFrame([acc_list], index=['test'], columns=label_list)
         circos = Circos.radar_chart(
             rader_df,
             vmax=1,
-            bg_color="#ffffff00",
+            bg_color="#010a1300",
             grid_interval_ratio=0.25
         )
         buf = io.BytesIO()
@@ -256,8 +258,8 @@ class ImageGen:
 
         # 各レーンの情報の描画
         x = 300
-        self.current_pixel = (x, 50)
-        self.text(text='Roles', font=self.large_font)
+        self.current_pixel = (x, 40)
+        self.text(text='Roles', font=self.large_font, fill='#e79500')
         self.current_pixel = (x, self.current_pixel[1] + 30)
         y = self.current_pixel[1]
         self.current_pixel = (x + 40, y)
@@ -268,10 +270,11 @@ class ImageGen:
         self.text("Winrate")
         self.current_pixel = (x + 200, y)
         self.text("KDA")
-        y = y + 40
+        y = y + 30
         for lane in LANE:
             self.current_pixel = (x + 45, y)
-            self.resize_paste(Image.open(f"position_icon/icon-position-{lane.lower()}.png"), (20, 20), center="y")
+            lane_icon = Image.open(f"position_icon/icon-position-{lane.lower()}.png")
+            self.resize_paste(lane_icon, (20, 20), center="y", mask=lane_icon)
             self.current_pixel = (x + 100, self.current_pixel[1] - 3)
             y = self.current_pixel[1]
             lane_df = df[df['position'] == lane]
@@ -294,7 +297,7 @@ class ImageGen:
 
         # Favorite Champion
         self.current_pixel = (x, self.current_pixel[1] + 30)
-        self.text(text='Favorite Champ', font=self.large_font)
+        self.text(text='Champs', font=self.large_font, fill='#e79500')
         if len(df) > 4:
             champs = df["championName"].value_counts()[:5]
         else:
@@ -310,7 +313,7 @@ class ImageGen:
         self.text("Winrate")
         self.current_pixel = (x + 210, y)
         self.text("KDA")
-        y += 40
+        y += 30
         for champ, _ in champs.items():
             champ_df = df[df['championName'] == champ]
             self.current_pixel = (x + 47, y - 2)
