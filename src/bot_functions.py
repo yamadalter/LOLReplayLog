@@ -5,7 +5,7 @@ import skill_rating
 import riot_api
 from discord import File, Embed, Colour, ui, ButtonStyle, Webhook
 from utils import get_keys
-from common import TEAM_NUM, MU, SIGMA, INIT_SIGMA, MIN_SIGMA, LANE, LinkDataJSON, TierData, result_webhook
+from common import TEAM_NUM, MU, SIGMA, INIT_SIGMA, MIN_SIGMA, LANE, LinkDataJSON, TierData, result_webhook, CREDENTIALS_JSON, SHEET_ID
 import aiohttp
 import os
 import shutil
@@ -15,6 +15,8 @@ import requests
 import tarfile
 import pandas as pd
 import numpy as np
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 
 class BotFunctions():
@@ -257,6 +259,49 @@ class BotFunctions():
             self.save_dic2json()
             await interaction.response.send_message(content=f'Success rename {gamename} #{tag}', ephemeral=True)
             return
+
+    async def upload(self, interaction):
+        # Dataframeをスプレッドシートに書き出す
+        dataframes = [self.df_game, self.df_player, self.df_team, self.df_bans, self.df_stats, self.df_participants]
+        sheetnames = ['game', 'player', 'team', 'bans', 'stats', 'participants']
+
+        # スプレッドシートへのアクセス認証情報を設定します。
+        scope = ['https://spreadsheets.google.com/feeds',
+                 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_JSON, scope)  # 認証情報ファイルへのパスを指定
+        client = gspread.authorize(creds)
+
+        # スプレッドシートを開きます。存在しない場合は新規作成します。
+        try:
+            spreadsheet = client.open_by_key(SHEET_ID)
+        except gspread.SpreadsheetNotFound:
+            spreadsheet = client.create('NSFP')
+
+        for sheet_name, dataframe in zip(sheetnames, dataframes):
+
+            rows = len(dataframe)
+            cols = len(dataframe.columns)
+
+            dataframe = dataframe.astype(str)
+
+            # シートを開きます。存在しない場合は新規作成します。
+            try:
+                worksheet = spreadsheet.worksheet(sheet_name)
+            except gspread.WorksheetNotFound:
+                worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=rows, cols=cols)  # 必要に応じて行数と列数を調整
+
+            # DataFrameの値をスプレッドシートに書き込みます。
+            # DataFrameの値をリストに変換
+            data = dataframe.values.tolist()
+
+            # ヘッダー行を追加
+            data.insert(0, dataframe.columns.tolist())
+
+            # スプレッドシートに書き込む
+            worksheet.update('A1', data)
+
+        if interaction is not None:
+            await interaction.followup.send(content=f"https://docs.google.com/spreadsheets/d/{spreadsheet.id}/edit?gid=0#gid=0")
 
     async def update(self, interaction):
         #  download versions.json

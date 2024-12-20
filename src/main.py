@@ -112,6 +112,11 @@ async def detail(interaction: Interaction, member: discord.Member = None):
 #     await interaction.response.defer(thinking=True)
 #     await bot_funcs.bestgame(interaction, member)
 
+@tree.command(name='upload', description='DB情報をスプレッドシートに書き出す')
+async def upload(interaction: Interaction):
+    await interaction.response.defer(thinking=True)
+    await bot_funcs.upload(interaction)
+
 
 @tree.command(name='update', description='version upを行います')
 async def update(interaction: Interaction):
