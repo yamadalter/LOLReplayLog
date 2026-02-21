@@ -2,7 +2,7 @@ import os
 import configparser
 import discord
 from common import TEAM_NUM, EMOJI_CHECK
-from discord import Client, Game, Intents, Interaction, AllowedMentions
+from discord import Client, Game, Intents, Interaction, AllowedMentions, app_commands
 from discord.app_commands import CommandTree
 from discord.ext import tasks
 from bot_functions import BotFunctions
@@ -33,7 +33,7 @@ db = DB()
 id_list = []
 
 
-@tasks.loop(minutes=2)
+@tasks.loop(seconds=20)
 async def db_sync():
     global id_list
     # データベースから最新のデータを取得
@@ -96,9 +96,23 @@ async def rename(interaction: Interaction, riotid: str, tag: str, member: discor
 
 
 @tree.command(name='stats', description='戦績を確認します')
-async def stats(interaction: Interaction, member: discord.Member = None):
-    # await interaction.response.defer(thinking=True)
-    await bot_funcs.stats(interaction, member)
+@app_commands.describe(
+    member='戦績を確認するメンバーを選択します',
+    season='統計を表示するシーズンを指定します（未指定で全期間）'
+)
+@app_commands.choices(season=[
+    app_commands.Choice(name="Season 14", value="14"),
+    app_commands.Choice(name="Season 15", value="15"),
+    app_commands.Choice(name="Season 15-1", value="15-1"),
+    app_commands.Choice(name="Season 15-2", value="15-2"),
+    app_commands.Choice(name="Season 15-3", value="15-3"),
+    app_commands.Choice(name="Season 16", value="16"),
+    app_commands.Choice(name="Season 16-1", value="16-1"),
+])
+async def stats(interaction: Interaction, member: discord.Member = None, season: str = None):
+    # 画像生成など重い処理を考慮し、応答を保留する
+    await interaction.response.defer(thinking=True)
+    await bot_funcs.stats(interaction, member, season)
 
 
 @tree.command(name='detail', description='戦績の詳細を確認します')

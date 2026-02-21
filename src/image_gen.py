@@ -177,22 +177,24 @@ class ImageGen:
         ax.grid()
         fig.savefig(f"data/ratings_imgs/{name}.png", transparent=True, bbox_inches='tight', pad_inches=0)
 
-    def generate_stats_img(self, dfs, puuid):
+    def generate_stats_img(self, dfs, puuid, period_text='All Time'):
         df_game, df_player, df_stats, df_participants = dfs
         LANE = ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY']
-        df = df_participants[df_participants['puuid'] == puuid]
-        df = pd.merge(df_stats, df, on=['gameId', 'participantId', 'puuid'])
+        
+        # 本人のデータのみを抽出した概要用データフレーム
+        df_user_p = df_participants[df_participants['puuid'] == puuid]
+        df = pd.merge(df_stats, df_user_p, on=['gameId', 'participantId', 'puuid'])
         n = len(df)
-        gamename = df_player[df_player['puuid'] == puuid]['gameName'].iloc[0]
-        tag = df_player[df_player['puuid'] == puuid]['tagLine'].iloc[0]
 
         self.current_image = Image.new('RGBA', (575, 485), color='#010a13')
         self.draw = ImageDraw.Draw(self.current_image)
 
-        # ゲーム情報、勝率、KDA の描画
+        # タイトルの描画 (All Time or Season X)
         self.current_pixel = (20, 0)
-        self.text(text='All Game', font=self.large_font, fill='#e79500')
-        kda = sum(df['kills'] + df['assists']) / np.clip(sum(df['deaths']), 1, None)
+        self.text(text=period_text, font=self.large_font, fill='#e79500')
+        
+        # 全体スタッツの描画
+        kda_val = sum(df['kills'] + df['assists']) / np.clip(sum(df['deaths']), 1, None)
         win = sum(df['win']) / n
         y = self.current_pixel[1] + 35
         self.current_pixel = (40, y)
@@ -205,127 +207,128 @@ class ImageGen:
         self.text(text=f'{win:.1%}', font=self.large_font)
 
         self.current_pixel = (70, y + 70)
-        kills = np.mean(df['kills'])
-        assists = np.mean(df['assists'])
-        deaths = np.mean(df['deaths'])
-        y = self.current_pixel[1]
-        self.text(text=f'{kills:.1f}' , font=self.large_font, fill='green', x=35)
-        self.current_pixel = (self.current_pixel[0], y)
+        avg_kills = np.mean(df['kills'])
+        avg_assists = np.mean(df['assists'])
+        avg_deaths = np.mean(df['deaths'])
+        y_pos = self.current_pixel[1]
+        self.text(text=f'{avg_kills:.1f}' , font=self.large_font, fill='green', x=35)
+        self.current_pixel = (self.current_pixel[0], y_pos)
         self.text(text='/' , font=self.large_font, x=15)
-        self.current_pixel = (self.current_pixel[0], y)
-        self.text(text=f'{deaths:.1f}' , font=self.large_font, fill='red', x=35)
-        self.current_pixel = (self.current_pixel[0], y)
+        self.current_pixel = (self.current_pixel[0], y_pos)
+        self.text(text=f'{avg_deaths:.1f}' , font=self.large_font, fill='red', x=35)
+        self.current_pixel = (self.current_pixel[0], y_pos)
         self.text(text='/' , font=self.large_font, x=15)
-        self.current_pixel = (self.current_pixel[0], y)
-        self.text(text=f'{assists:.1f}' , font=self.large_font, fill='yellow', x=30)
+        self.current_pixel = (self.current_pixel[0], y_pos)
+        self.text(text=f'{avg_assists:.1f}' , font=self.large_font, fill='yellow', x=30)
         self.current_pixel = (70, self.current_pixel[1] + 30)
-        self.text(text=f'Average KDA: {kda:.2f}')
-        self.current_pixel = (0, self.current_pixel[1] + 30)
-
-        # RaderChart
-        dmg, cs, vision, kda, obj = 0, 0, 0, 0, 0
+        self.text(text=f'Average KDA: {kda_val:.2f}')
+        
+        # Radar Chart の計算 (母集団は全プレイヤー)
+        dmg, cs, vision, kda_radar, obj = 0, 0, 0, 0, 0
         for lane in LANE:
-            lane_df = pd.merge(df_stats, df_participants.query('position==@lane'), on=['gameId', 'participantId'])
-            lane_df = pd.merge(lane_df, df_game.rename(columns={'id': 'gameId'}), on=['gameId'])
+            # そのレーンの全プレイヤーを抽出
+            lane_all = pd.merge(df_stats, df_participants.query('position==@lane'), on=['gameId', 'participantId'])
+            lane_all = pd.merge(lane_all, df_game.rename(columns={'id': 'gameId'}), on=['gameId'])
 
-            dmgs = lane_df['totalDamageDealtToChampions'] / (lane_df['gameDuration'] / 60)
-            css = lane_df['totalMinionsKilled'] / (lane_df['gameDuration'] / 60)
-            visions = lane_df['visionScore'] / (lane_df['gameDuration'] / 60)
-            kdas = (lane_df['kills'] + lane_df['assists']) / np.clip(lane_df['deaths'], 1, None)
-            objs = lane_df['damageDealtToObjectives'] / (lane_df['gameDuration'] / 60)
-            flag = lane_df['puuid_x'] == puuid
+            if len(lane_all) < 2: continue # 比較対象がいない場合はスキップ
+
+            # 各指標の算出
+            dmgs = lane_all['totalDamageDealtToChampions'] / (lane_all['gameDuration'] / 60)
+            css = lane_all['totalMinionsKilled'] / (lane_all['gameDuration'] / 60)
+            visions = lane_all['visionScore'] / (lane_all['gameDuration'] / 60)
+            kdas = (lane_all['kills'] + lane_all['assists']) / np.clip(lane_all['deaths'], 1, None)
+            objs = lane_all['damageDealtToObjectives'] / (lane_all['gameDuration'] / 60)
+            
+            # 全プレイヤーの分布における本人のZスコア
+            flag = lane_all['puuid_x'] == puuid
             if sum(flag) > 0:
                 dmg += np.mean(((scipy.stats.zscore(dmgs) + 1) / 2)[flag]) * sum(flag) / n
                 cs += np.mean(((scipy.stats.zscore(css) + 1) / 2)[flag]) * sum(flag) / n
                 vision += np.mean(((scipy.stats.zscore(visions) + 1) / 2)[flag]) * sum(flag) / n
-                kda += np.mean(((scipy.stats.zscore(kdas) + 1) / 2)[flag]) * sum(flag) / n
+                kda_radar += np.mean(((scipy.stats.zscore(kdas) + 1) / 2)[flag]) * sum(flag) / n
                 obj += np.mean(((scipy.stats.zscore(objs) + 1) / 2)[flag]) * sum(flag) / n
+
         label_list = ['KDA', 'CS', 'VISION', 'OBJECT', 'DMG']
-        acc_list = np.clip([kda, cs, vision, obj, dmg], 0, 1)
-        rader_df = pd.DataFrame([acc_list], index=['test'], columns=label_list)
-        circos = Circos.radar_chart(
-            rader_df,
-            vmax=1,
-            bg_color="#010a1300",
-            grid_interval_ratio=0.25
-        )
+        acc_list = np.clip([kda_radar, cs, vision, obj, dmg], 0, 1)
+        rader_df = pd.DataFrame([acc_list], index=['stats'], columns=label_list)
+        circos = Circos.radar_chart(rader_df, vmax=1, bg_color="#010a1300", grid_interval_ratio=0.25)
+        
         buf = io.BytesIO()
         circos.savefig(buf, figsize=(6, 6), dpi=250)
         buf.seek(0)
-        img2 = Image.open(buf)
-        self.current_pixel = (0, self.current_pixel[1])
-        self.resize_paste(img2, (300, 300))
+        radar_img = Image.open(buf)
+        self.current_pixel = (0, self.current_pixel[1] + 30)
+        self.resize_paste(radar_img, (300, 300))
 
-        # 各レーンの情報の描画
-        x = 300
-        self.current_pixel = (x, 40)
+        # Roles の描画
+        x_start = 300
+        self.current_pixel = (x_start, 40)
         self.text(text='Roles', font=self.large_font, fill='#e79500')
-        self.current_pixel = (x, self.current_pixel[1] + 30)
-        y = self.current_pixel[1]
-        self.current_pixel = (x + 40, y)
+        self.current_pixel = (x_start, self.current_pixel[1] + 30)
+        y_role = self.current_pixel[1]
+        self.current_pixel = (x_start + 40, y_role)
         self.text("Role")
-        self.current_pixel = (x + 80, y)
+        self.current_pixel = (x_start + 80, y_role)
         self.text("Games")
-        self.current_pixel = (x + 140, y)
+        self.current_pixel = (x_start + 140, y_role)
         self.text("Winrate")
-        self.current_pixel = (x + 200, y)
+        self.current_pixel = (x_start + 200, y_role)
         self.text("KDA")
-        y = y + 30
+        y_role += 30
         for lane in LANE:
-            self.current_pixel = (x + 45, y)
-            lane_icon = Image.open(f"position_icon/icon-position-{lane.lower()}.png")
-            self.resize_paste(lane_icon, (20, 20), center="y", mask=lane_icon)
-            self.current_pixel = (x + 100, self.current_pixel[1] - 3)
-            y = self.current_pixel[1]
+            self.current_pixel = (x_start + 45, y_role)
+            try:
+                lane_icon = Image.open(f"position_icon/icon-position-{lane.lower()}.png")
+                self.resize_paste(lane_icon, (20, 20), center="y", mask=lane_icon)
+            except: pass
+            self.current_pixel = (x_start + 100, self.current_pixel[1] - 3)
+            y_curr = self.current_pixel[1]
             lane_df = df[df['position'] == lane]
             if len(lane_df) > 0:
-                lane_df = df[df['position'] == lane]
-                lane_kda = sum(lane_df['kills'] + lane_df['assists']) / np.clip(sum(lane_df['deaths']), 1, None)
-                lane_win = sum(lane_df['win']) / len(lane_df)
+                l_kda = sum(lane_df['kills'] + lane_df['assists']) / np.clip(sum(lane_df['deaths']), 1, None)
+                l_win = sum(lane_df['win']) / len(lane_df)
                 self.text(str(len(lane_df)))
-                self.current_pixel = (x + 155, y)
-                self.text(f"{lane_win:.1%}")
-                self.current_pixel = (x + 210, y)
-                self.text(f"{lane_kda:.2f}")
+                self.current_pixel = (x_start + 155, y_curr)
+                self.text(f"{l_win:.1%}")
+                self.current_pixel = (x_start + 210, y_curr)
+                self.text(f"{l_kda:.2f}")
             else:
                 self.text("-")
-                self.current_pixel = (x + 155, y)
+                self.current_pixel = (x_start + 155, y_curr)
                 self.text("-")
-                self.current_pixel = (x + 210, y)
+                self.current_pixel = (x_start + 210, y_curr)
                 self.text("-")
-            y += 30
+            y_role += 30
 
-        # Favorite Champion
-        self.current_pixel = (x, self.current_pixel[1] + 30)
+        # Champs の描画
+        self.current_pixel = (x_start, y_role)
         self.text(text='Champs', font=self.large_font, fill='#e79500')
-        if len(df) > 4:
-            champs = df["championName"].value_counts()[:5]
-        else:
-            champs = df["championName"].value_counts()[:len(df)]
+        champs = df["championName"].value_counts()[:5]
 
-        self.current_pixel = (x, self.current_pixel[1] + 30)
-        y = self.current_pixel[1]
-        self.current_pixel = (x + 40, y)
+        self.current_pixel = (x_start, self.current_pixel[1] + 30)
+        y_champ = self.current_pixel[1]
+        self.current_pixel = (x_start + 40, y_champ)
         self.text("Name")
-        self.current_pixel = (x + 90, y)
+        self.current_pixel = (x_start + 90, y_champ)
         self.text("Games")
-        self.current_pixel = (x + 150, y)
+        self.current_pixel = (x_start + 150, y_champ)
         self.text("Winrate")
-        self.current_pixel = (x + 210, y)
+        self.current_pixel = (x_start + 210, y_champ)
         self.text("KDA")
-        y += 30
+        y_champ += 30
         for champ, _ in champs.items():
             champ_df = df[df['championName'] == champ]
-            self.current_pixel = (x + 47, y - 2)
+            self.current_pixel = (x_start + 47, y_champ - 2)
             self.resize_paste(self.get_champ_icon(champ), (25, 25), center="y")
-            self.current_pixel = (x + 100, self.current_pixel[1] + 2)
-            y = self.current_pixel[1]
-            champ_kda = sum(champ_df['kills'] + champ_df['assists']) / np.clip(sum(champ_df['deaths']), 1, None)
-            champ_win = sum(champ_df['win']) / len(champ_df)
+            self.current_pixel = (x_start + 100, self.current_pixel[1] + 2)
+            y_curr = self.current_pixel[1]
+            c_kda = sum(champ_df['kills'] + champ_df['assists']) / np.clip(sum(champ_df['deaths']), 1, None)
+            c_win = sum(champ_df['win']) / len(champ_df)
             self.text(str(len(champ_df)))
-            self.current_pixel = (x + 155, y)
-            self.text(f"{champ_win:.1%}")
-            self.current_pixel = (x + 210, y)
-            self.text(f"{champ_kda:.2f}")
-            y += 30
+            self.current_pixel = (x_start + 155, y_curr)
+            self.text(f"{c_win:.1%}")
+            self.current_pixel = (x_start + 210, y_curr)
+            self.text(f"{c_kda:.2f}")
+            y_champ += 30
+            
         self.current_image.save(f"data/stats_imgs/{puuid}.png")

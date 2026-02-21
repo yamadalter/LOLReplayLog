@@ -94,57 +94,99 @@ class BotFunctions():
         self.dic.pop(discord_id)
         await interaction.response.send_message(content=f'<@{discord_id}> has been unlinked', ephemeral=True)
 
-    async def stats(self, interaction, member):
+    async def stats(self, interaction, member, season=None):
         discord_id = str(interaction.user.id) if member is None else str(member.id)
         if discord_id in self.dic:
             gamename = self.dic[discord_id]['gamename']
             tag = self.dic[discord_id]['tag']
         else:
-            await interaction.response.send_message(content="Summoner is not linked", ephemeral=True)
+            await interaction.followup.send(content="Summoner is not linked", ephemeral=True)
             return
-        puuid = self.df_player.query('gameName == @gamename and tagLine == @tag')['puuid']
-        if len(puuid) > 0:
-            puuid = puuid.values[0]
+
+        puuid_series = self.df_player.query('gameName == @gamename and tagLine == @tag')['puuid']
+        if len(puuid_series) > 0:
+            puuid = puuid_series.values[0]
         else:
-            await interaction.response.send_message(content="Log not found", ephemeral=True)
+            await interaction.followup.send(content="Log not found", ephemeral=True)
             return
+
         name = f"<@{discord_id}>"
         avator = await self.user(discord_id)
 
         if self.df_player is not None:
-            stats_df = self.df_stats[self.df_stats["puuid"] == puuid]
-            p_df = self.df_participants[self.df_participants["puuid"] == puuid]
-            if len(stats_df) < 1:
-                await interaction.response.send_message(content="Log not found", ephemeral=True)
+            # データのコピー（フィルタリング用）
+            game_df = self.df_game.copy()
+            stats_df = self.df_stats.copy()
+            p_df = self.df_participants.copy()
+
+            # --- シーズンフィルタリング ---
+            if season is not None:
+                # バージョン列名を自動判別
+                version_col = next((c for c in ['gameVersion', 'version', 'game_version'] if c in game_df.columns), None)
+                
+                if version_col:
+                    v_split = game_df[version_col].str.split('.', expand=True)
+                    game_df['major'] = pd.to_numeric(v_split[0], errors='coerce').fillna(0).astype(int)
+                    game_df['minor'] = pd.to_numeric(v_split[1], errors='coerce').fillna(0).astype(int)
+
+                    if season == "14":
+                        game_df = game_df[game_df['major'] < 15]
+                    elif season == "15":
+                        game_df = game_df[(game_df['major'] == 15) | ((game_df['major'] == 15) & (game_df['minor'] >= 1))]
+                    elif season == "15-1":
+                        game_df = game_df[(game_df['major'] == 15) & (game_df['minor'] >= 1) & (game_df['minor'] <= 8)]
+                    elif season == "15-2":
+                        game_df = game_df[(game_df['major'] == 15) & (game_df['minor'] >= 9) & (game_df['minor'] <= 16)]
+                    elif season == "15-3":
+                        game_df = game_df[(game_df['major'] == 15) & ((game_df['major'] == 15) & (game_df['minor'] >= 17))]
+                    elif season == "16":
+                        game_df = game_df[(game_df['major'] == 16)]
+                    elif season == "16-1":
+                        game_df = game_df[(game_df['major'] == 16) & (game_df['minor'] >= 1) & (game_df['minor'] <= 8)]
+                    
+                    # 絞り込まれたゲームIDに一致する全プレイヤーのデータを抽出
+                    valid_ids = game_df['id'].tolist()
+                    stats_df = stats_df[stats_df['gameId'].isin(valid_ids)]
+                    p_df = p_df[p_df['gameId'].isin(valid_ids)]
+
+            # 本人のデータがあるかチェック
+            user_stats = stats_df[stats_df["puuid"] == puuid]
+            if len(user_stats) < 1:
+                period_name = f"Season {season}" if season else "全期間"
+                await interaction.followup.send(content=f"{period_name}の戦績が見つかりませんでした。", ephemeral=True)
                 return
-            winrate = sum(stats_df["win"]) / len(stats_df) * 100
-            if len(p_df) > 4:
-                champ = p_df["championName"].value_counts()[:5]
-            else:
-                champ = p_df["championName"].value_counts()[:len(p_df)]
-            famouschamp = champ.keys()[0]
-            if winrate > 60:
-                stats_color = 0x0099E1
-            elif winrate > 50:
-                stats_color = 0x00D166
-            elif winrate > 40:
-                stats_color = 0xF8C300
-            else:
-                stats_color = 0xFD0061
-            file1 = File(f'img/champion/{famouschamp}.png', filename='champ.png')
-            embed = Embed(title="Stats", description=f"**{name}**\n", color=stats_color)
-            if (avator is not None) and (avator.avatar is not None):
-                user_icon = avator.avatar.url
-            else:
-                user_icon = ""
+
+            # 勝率に応じたカラー設定
+            winrate = sum(user_stats["win"]) / len(user_stats) * 100
+            stats_color = 0xFFFFFF 
+            if winrate > 60: stats_color = 0x0099E1
+            elif winrate > 50: stats_color = 0x00D166
+            elif winrate > 40: stats_color = 0xF8C300
+            else: stats_color = 0xFD0061
+
+            # 画像左上に表示するテキスト
+            display_period = f"Season {season}" if season else "All Time"
+            
+            # 画像生成の実行 (stats_df, p_df は絞り込まれた全プレイヤー分を渡す)
+            self.image_gen.generate_stats_img([game_df, self.df_player, stats_df, p_df], puuid, period_text=display_period)
+            
+            # チャンピオンアイコン取得用
+            user_p = p_df[p_df["puuid"] == puuid]
+            famouschamp = user_p["championName"].value_counts().keys()[0] if not user_p.empty else "Aatrox"
+
+            # Embedの作成
+            embed = Embed(title=f"Stats ({display_period})", description=f"**{name}**\n", color=stats_color)
+            user_icon = avator.avatar.url if (avator and avator.avatar) else ""
             embed.set_author(name=f'{gamename} #{tag}', icon_url=user_icon)
-            embed.set_thumbnail(url="attachment://champ.png")
-            self.image_gen.generate_stats_img([self.df_game, self.df_player, self.df_stats, self.df_participants], puuid)
+            
+            file1 = File(f'img/champion/{famouschamp}.png', filename='champ.png')
             file2 = File(f'data/stats_imgs/{puuid}.png', filename="image.png")
+            embed.set_thumbnail(url="attachment://champ.png")
             embed.set_image(url="attachment://image.png")
-            await interaction.response.send_message(files=[file1, file2], embed=embed)
+            
+            await interaction.followup.send(files=[file1, file2], embed=embed)
         else:
-            await interaction.response.send_message(content="Log file not found", ephemeral=True)
+            await interaction.followup.send(content="Log file not found", ephemeral=True)
             return
 
     async def bestgame(self, interaction, member):

@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 class DB:
     def __init__(self):
-        self.engine = create_engine(f'mysql+pymysql://{RDS_USER}:{RDS_PASSWORD}@{RDS_HOST}:3306/{RDS_DB}')
+        self.engine = create_engine(f'mysql+pymysql://{RDS_USER}:{RDS_PASSWORD}@{RDS_HOST}:16816/{RDS_DB}')
         self.Session = sessionmaker(bind=self.engine)
 
     def get_tables(self):
