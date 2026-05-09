@@ -3,6 +3,8 @@ import replay_reader
 import summoner_data
 import skill_rating
 import riot_api
+import asyncio
+import logging
 from discord import File, Embed, Colour, ui, ButtonStyle, Webhook
 from utils import get_keys
 from common import TEAM_NUM, MU, SIGMA, INIT_SIGMA, MIN_SIGMA, LANE, LinkDataJSON, TierData, result_webhook, CREDENTIALS_JSON, SHEET_ID
@@ -49,18 +51,46 @@ class BotFunctions():
         self.df_participants = None
 
     async def result(self, interaction=None, id=None):  # Get match from ID
-        replay = replay_reader.ReplayReader(self, id)
-        if not os.path.exists(f'data/match_imgs/{id}.png'):
-            replay.generate_game_img(self.dic)
-        embed = Embed(title="Result", description=f"{id}", color=Colour.blurple())
-        file = File(f'data/match_imgs/{id}.png', filename="image.png")
-        embed.set_image(url="attachment://image.png")
-        if interaction is not None:
-            await interaction.followup.send(file=file, embed=embed)
-        else:
-            async with aiohttp.ClientSession() as session:
-                webhook = Webhook.from_url(result_webhook, session=session)
-                await webhook.send(file=file, embed=embed)
+        if id is None:
+            logging.error("result function called with id=None")
+            return
+
+        try:
+            image_path = f'data/match_imgs/{id}.png'
+
+            # 画像がなければ生成する
+            if not os.path.exists(image_path):
+                replay = replay_reader.ReplayReader(self, id)
+                
+                # 画像生成を別スレッドで実行してブロッキングを回避
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(
+                    None,  # デフォルトのThreadPoolExecutorを使用
+                    replay.generate_game_img,
+                    self.dic
+                )
+
+            # 画像生成が成功したか再チェック
+            if not os.path.exists(image_path):
+                logging.error(f"Image generation failed for match ID: {id}")
+                return
+
+            # EmbedとFileを作成して送信
+            embed = Embed(title="Result", description=f"{id}", color=Colour.blurple())
+            file = File(image_path, filename="image.png")
+            embed.set_image(url="attachment://image.png")
+
+            if interaction is not None:
+                await interaction.followup.send(file=file, embed=embed)
+            else:
+                async with aiohttp.ClientSession() as session:
+                    webhook = Webhook.from_url(result_webhook, session=session)
+                    await webhook.send(file=file, embed=embed)
+
+        except FileNotFoundError:
+            logging.error(f"Image file not found for match ID: {id} after generation attempt.")
+        except Exception as e:
+            logging.error(f"An error occurred in result function for match ID {id}: {e}", exc_info=True)
 
     async def link(self, interaction, riotid, tag, member=None):
         # link id
@@ -143,7 +173,8 @@ class BotFunctions():
                         game_df = game_df[(game_df['major'] == 16)]
                     elif season == "16-1":
                         game_df = game_df[(game_df['major'] == 16) & (game_df['minor'] >= 1) & (game_df['minor'] <= 8)]
-                    
+                    elif season == "16-2":
+                        game_df = game_df[(game_df['major'] == 16) & (game_df['minor'] >= 9) & (game_df['minor'] <= 16)]
                     # 絞り込まれたゲームIDに一致する全プレイヤーのデータを抽出
                     valid_ids = game_df['id'].tolist()
                     stats_df = stats_df[stats_df['gameId'].isin(valid_ids)]

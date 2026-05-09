@@ -33,24 +33,22 @@ db = DB()
 id_list = []
 
 
-@tasks.loop(seconds=20)
+@tasks.loop(seconds=40)
 async def db_sync():
     global id_list
     # データベースから最新のデータを取得
     bot_funcs.df_game, bot_funcs.df_player, bot_funcs.df_team, bot_funcs.df_bans, bot_funcs.df_stats, bot_funcs.df_participants = db.get_tables()
 
-    previous_ids = id_list
-    id_list = bot_funcs.df_game['id'].tolist()
-    new_ids = []
-    # 新しいIDが追加された場合
-    for i in id_list:
-        # 新しく追加されたIDを取得
-        if i not in previous_ids:
-            new_ids.append(i)
+    current_id_list = bot_funcs.df_game['id'].tolist()
+    
+    # setを使用して新しいIDを効率的に見つける
+    new_ids = set(current_id_list) - set(id_list)
+    # グローバルIDリストを最新の状態に更新
+    id_list = current_id_list
 
     # 新しく追加されたIDごとに処理を行う
     for new_id in new_ids:
-        print(f"New game ID: {new_id}")  # ここに新しいIDに対する処理を追加
+        print(f"New game ID: {new_id}")
         await bot_funcs.result(id=new_id)
 
 
@@ -108,6 +106,7 @@ async def rename(interaction: Interaction, riotid: str, tag: str, member: discor
     app_commands.Choice(name="Season 15-3", value="15-3"),
     app_commands.Choice(name="Season 16", value="16"),
     app_commands.Choice(name="Season 16-1", value="16-1"),
+    app_commands.Choice(name="Season 16-2", value="16-2")
 ])
 async def stats(interaction: Interaction, member: discord.Member = None, season: str = None):
     # 画像生成など重い処理を考慮し、応答を保留する

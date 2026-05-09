@@ -65,21 +65,41 @@ class ImageGen:
         for style in self.rune_data:
             for runes in style["slots"][slot]["runes"]:
                 if str(runes["id"]) == str(rune_id):
-                    return Image.open("img/" + runes["icon"])
+                    try:
+                        return Image.open("img/" + runes["icon"])
+                    except FileNotFoundError:
+                        print(f"WARN: Rune icon not found at path: {'img/' + runes['icon']}")
+                        return Image.new('RGBA', (1, 1))
+        print(f"WARN: Rune id {rune_id} not found.")
+        return Image.new('RGBA', (1, 1))
 
     def get_style_img(self, style_id):
         for style in self.rune_data:
             if str(style["id"]) == str(style_id):
-                return Image.open("img/" + style["icon"])
+                try:
+                    return Image.open("img/" + style["icon"])
+                except FileNotFoundError:
+                    print(f"WARN: Style icon not found at path: {'img/' + style['icon']}")
+                    return Image.new('RGBA', (1, 1))
+        print(f"WARN: Style id {style_id} not found.")
+        return Image.new('RGBA', (1, 1))
 
     def get_champ_icon(self, champ):
-        return Image.open(f"img/champion/{champ}.png")
+        try:
+            return Image.open(f"img/champion/{champ}.png")
+        except FileNotFoundError:
+            print(f"WARN: Champion icon not found for: {champ}")
+            return Image.new('RGBA', (1, 1))
 
     def get_item_icon(self, item):
         if str(item) == "0":  # empty item slot, make empty item slot img to take up space
             return Image.new('RGBA', (30, 30))
         else:
-            return Image.open(f"img/item/{item}.png")
+            try:
+                return Image.open(f"img/item/{item}.png")
+            except FileNotFoundError:
+                print(f"WARN: Item icon not found for: {item}")
+                return Image.new('RGBA', (30, 30))
 
     def generate_player_imgs(self, player):
         rune = self.get_rune_img(player["perk0"], 0)
