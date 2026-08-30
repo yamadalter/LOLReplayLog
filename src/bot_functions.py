@@ -414,25 +414,25 @@ class BotFunctions():
         """Display skill rating progression for a linked summoner."""
         discord_id = str(interaction.user.id) if member is None else str(member.id)
         if discord_id not in self.dic:
-            await interaction.response.send_message(content="Summoner is not linked", ephemeral=True)
+            await interaction.followup.send(content="Summoner is not linked", ephemeral=True)
             return
         gamename = self.dic[discord_id]['gamename']
         tag = self.dic[discord_id]['tag']
         puuid_series = self.df_player.query('gameName == @gamename and tagLine == @tag')['puuid']
         if len(puuid_series) == 0:
-            await interaction.response.send_message(content="Log not found", ephemeral=True)
+            await interaction.followup.send(content="Log not found", ephemeral=True)
             return
         puuid = puuid_series.values[0]
 
         # Ensure dataframes are loaded
         if self.df_game is None or self.df_player is None or self.df_stats is None or self.df_participants is None:
-            await interaction.response.send_message(content="Data not loaded yet", ephemeral=True)
+            await interaction.followup.send(content="Data not loaded yet", ephemeral=True)
             return
 
         # Get player's games
         player_stats = self.df_stats[self.df_stats['puuid'] == puuid].copy()
         if player_stats.empty:
-            await interaction.response.send_message(content="No stats found for this summoner", ephemeral=True)
+            await interaction.followup.send(content="No stats found for this summoner", ephemeral=True)
             return
         # Merge with game to get gameId (already present) and maybe timestamp
         games = self.df_game[['id']].copy()  # we only need id for ordering
@@ -444,10 +444,13 @@ class BotFunctions():
 
         # Prepare rating dict for skill_rating.update_ratings
         # We'll collect all puuids encountered to initialize dict
-        all_puuids = set()
         # We'll process games sequentially, need participants per game
         # Pre-fetch participants for all games we need
         participants_needed = self.df_participants[self.df_participants['gameId'].isin(game_ids)]
+        # Get all unique puuids from participants_needed
+        all_puuids = set(participants_needed['puuid'].unique())
+        # Ensure the target puuid is included
+        all_puuids.add(puuid)
         # Prepare dict structure: {puuid: {'mu': [], 'sigma': [], 'gameid': []}}
         ratings_dict = {}
         for pid in all_puuids:
@@ -498,7 +501,7 @@ class BotFunctions():
         # After processing, extract mu and sigma lists for target puuid
         target_data = ratings_dict.get(puuid)
         if not target_data or len(target_data['mu']) <= 1:
-            await interaction.response.send_message(content="Not enough data to generate rating graph", ephemeral=True)
+            await interaction.followup.send(content="Not enough data to generate rating graph", ephemeral=True)
             return
         mu_list = target_data['mu']
         sigma_list = target_data['sigma']
@@ -510,4 +513,4 @@ class BotFunctions():
         file = File(f'data/ratings_imgs/{puuid}.png', filename="rating.png")
         embed = Embed(title=f"Rating Progression for {gamename}#{tag}", color=Colour.blurple())
         embed.set_image(url="attachment://rating.png")
-        await interaction.response.send_message(embed=embed, file=file)
+        await interaction.followup.send(embed=embed, file=file)
