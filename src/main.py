@@ -106,7 +106,8 @@ async def rename(interaction: Interaction, riotid: str, tag: str, member: discor
     app_commands.Choice(name="Season 15-3", value="15-3"),
     app_commands.Choice(name="Season 16", value="16"),
     app_commands.Choice(name="Season 16-1", value="16-1"),
-    app_commands.Choice(name="Season 16-2", value="16-2")
+    app_commands.Choice(name="Season 16-2", value="16-2"),
+    app_commands.Choice(name="Season 16-3", value="16-3")
 ])
 async def stats(interaction: Interaction, member: discord.Member = None, season: str = None):
     # 画像生成など重い処理を考慮し、応答を保留する

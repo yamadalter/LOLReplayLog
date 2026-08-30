@@ -174,7 +174,9 @@ class BotFunctions():
                     elif season == "16-1":
                         game_df = game_df[(game_df['major'] == 16) & (game_df['minor'] >= 1) & (game_df['minor'] <= 8)]
                     elif season == "16-2":
-                        game_df = game_df[(game_df['major'] == 16) & (game_df['minor'] >= 9) & (game_df['minor'] <= 16)]
+                        game_df = game_df[(game_df['major'] == 16) & (game_df['minor'] >= 9) & (game_df['minor'] <= 15)]
+                    elif season == "16-3":
+                        game_df = game_df[(game_df['major'] == 16) & (game_df['minor'] >= 16) & (game_df['minor'] <= 24)]
                     # 絞り込まれたゲームIDに一致する全プレイヤーのデータを抽出
                     valid_ids = game_df['id'].tolist()
                     stats_df = stats_df[stats_df['gameId'].isin(valid_ids)]
