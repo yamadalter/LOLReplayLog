@@ -471,34 +471,30 @@ class BotFunctions():
             # Get participants for this game
             game_part = participants_needed[participants_needed['gameId'] == gid]
             if game_part.empty:
+                # No participant data for this game; cannot update ratings
                 continue
-            # Determine winning side: any player with win True
-            win_side = None
-            for _, row in game_part.iterrows():
-                # Find if this player won
-                # Need stats row for this puuid and gameId
-                stat_row = player_stats[(player_stats['puuid'] == row['puuid']) & (player_stats['gameId'] == gid)]
-                if not stat_row.empty and stat_row.iloc[0]['win']:
-                    win_side = row['side']
-                    break
-            if win_side is None:
-                # fallback: first player's side? Not ideal
-                win_side = 0
+            # Get target's stats for this game to know side and win
+            target_stat = player_stats[(player_stats['puuid'] == puuid) & (player_stats['gameId'] == gid)]
+            if target_stat.empty:
+                # Target player not found in stats for this game (should not happen if stats matched)
+                continue
+            target_side = int(target_stat.iloc[0]['side'])
+            target_win = bool(target_stat.iloc[0]['win'])
+            # Determine winning side based on target's result
+            win_side = target_side if target_win else 1 - target_side
             # Split puuids by side
-            side0 = game_part[game_part['side'] == 0]['puuid'].tolist()
-            side1 = game_part[game_part['side'] == 1]['puuid'].tolist()
-            winners = side0 if win_side == 0 else side1
-            losers = side1 if win_side == 0 else side0
+            side0_puuids = game_part[game_part['side'] == 0]['puuid'].tolist()
+            side1_puuids = game_part[game_part['side'] == 1]['puuid'].tolist()
+            winners = side0_puuids if win_side == 0 else side1_puuids
+            losers = side1_puuids if win_side == 0 else side0_puuids
             # Ensure we have entries in ratings_dict for all puuids
-            for pid in side0 + side1:
+            for pid in side0_puuids + side1_puuids:
                 if pid not in ratings_dict:
                     ratings_dict[pid] = {'mu': [], 'sigma': [], 'gameid': []}
                     ratings_dict[pid]['mu'].append(MU)
                     ratings_dict[pid]['sigma'].append(SIGMA)
                     ratings_dict[pid]['gameid'].append(None)
             # Update ratings using skill_rating.update_ratings
-            # Note: update_ratings expects dict d, game id, winners list, losers list
-            # We'll pass the current game id as idx (or gid)
             updated_dict, _ = self.skill_rating.update_ratings(ratings_dict, gid, winners, losers)
             if updated_dict is not None:
                 ratings_dict = updated_dict
