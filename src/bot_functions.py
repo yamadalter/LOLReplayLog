@@ -441,6 +441,11 @@ class BotFunctions():
         # Sort by gameId as proxy for time
         player_games = player_games.sort_values('gameId')
         game_ids = player_games['gameId'].tolist()
+        # Debug info
+        debug_info = f"Debug: player games={len(game_ids)}"
+        if len(game_ids) == 0:
+            await interaction.followup.send(content=debug_info + " - No games found for this puuid in stats.", ephemeral=True)
+            return
 
         # Prepare rating dict for skill_rating.update_ratings
         # We'll collect all puuids encountered to initialize dict
@@ -501,7 +506,8 @@ class BotFunctions():
         # After processing, extract mu and sigma lists for target puuid
         target_data = ratings_dict.get(puuid)
         if not target_data or len(target_data['mu']) <= 1:
-            await interaction.followup.send(content="Not enough data to generate rating graph", ephemeral=True)
+            debug2 = f"Debug: target mu length={len(target_data['mu']) if target_data else 'None'}; total puuids in dict={len(ratings_dict)}"
+            await interaction.followup.send(content="Not enough data to generate rating graph\n" + debug_info + "\n" + debug2, ephemeral=True)
             return
         mu_list = target_data['mu']
         sigma_list = target_data['sigma']
