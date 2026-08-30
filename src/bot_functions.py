@@ -409,3 +409,105 @@ class BotFunctions():
     def save_dic2json(self):
         json_file = open(LinkDataJSON, mode="w", encoding='utf-8')
         json.dump(self.dic, json_file, indent=2, ensure_ascii=False)
+
+    async def rating_graph(self, interaction, member=None):
+        """Display skill rating progression for a linked summoner."""
+        discord_id = str(interaction.user.id) if member is None else str(member.id)
+        if discord_id not in self.dic:
+            await interaction.response.send_message(content="Summoner is not linked", ephemeral=True)
+            return
+        gamename = self.dic[discord_id]['gamename']
+        tag = self.dic[discord_id]['tag']
+        puuid_series = self.df_player.query('gameName == @gamename and tagLine == @tag')['puuid']
+        if len(puuid_series) == 0:
+            await interaction.response.send_message(content="Log not found", ephemeral=True)
+            return
+        puuid = puuid_series.values[0]
+
+        # Ensure dataframes are loaded
+        if self.df_game is None or self.df_player is None or self.df_stats is None or self.df_participants is None:
+            await interaction.response.send_message(content="Data not loaded yet", ephemeral=True)
+            return
+
+        # Get player's games
+        player_stats = self.df_stats[self.df_stats['puuid'] == puuid].copy()
+        if player_stats.empty:
+            await interaction.response.send_message(content="No stats found for this summoner", ephemeral=True)
+            return
+        # Merge with game to get gameId (already present) and maybe timestamp
+        games = self.df_game[['id']].copy()  # we only need id for ordering
+        games = games.rename(columns={'id': 'gameId'})
+        player_games = player_stats.merge(games, on='gameId', how='left')
+        # Sort by gameId as proxy for time
+        player_games = player_games.sort_values('gameId')
+        game_ids = player_games['gameId'].tolist()
+
+        # Prepare rating dict for skill_rating.update_ratings
+        # We'll collect all puuids encountered to initialize dict
+        all_puuids = set()
+        # We'll process games sequentially, need participants per game
+        # Pre-fetch participants for all games we need
+        participants_needed = self.df_participants[self.df_participants['gameId'].isin(game_ids)]
+        # Prepare dict structure: {puuid: {'mu': [], 'sigma': [], 'gameid': []}}
+        ratings_dict = {}
+        for pid in all_puuids:
+            ratings_dict[pid] = {'mu': [], 'sigma': [], 'gameid': []}
+        # Initialize with default mu/sigma
+        for pid in all_puuids:
+            ratings_dict[pid]['mu'].append(MU)
+            ratings_dict[pid]['sigma'].append(SIGMA)
+            ratings_dict[pid]['gameid'].append(None)  # placeholder for game 0
+
+        # Iterate over games in order
+        for idx, gid in enumerate(game_ids):
+            # Get participants for this game
+            game_part = participants_needed[participants_needed['gameId'] == gid]
+            if game_part.empty:
+                continue
+            # Determine winning side: any player with win True
+            win_side = None
+            for _, row in game_part.iterrows():
+                # Find if this player won
+                # Need stats row for this puuid and gameId
+                stat_row = player_stats[(player_stats['puuid'] == row['puuid']) & (player_stats['gameId'] == gid)]
+                if not stat_row.empty and stat_row.iloc[0]['win']:
+                    win_side = row['side']
+                    break
+            if win_side is None:
+                # fallback: first player's side? Not ideal
+                win_side = 0
+            # Split puuids by side
+            side0 = game_part[game_part['side'] == 0]['puuid'].tolist()
+            side1 = game_part[game_part['side'] == 1]['puuid'].tolist()
+            winners = side0 if win_side == 0 else side1
+            losers = side1 if win_side == 0 else side0
+            # Ensure we have entries in ratings_dict for all puuids
+            for pid in side0 + side1:
+                if pid not in ratings_dict:
+                    ratings_dict[pid] = {'mu': [], 'sigma': [], 'gameid': []}
+                    ratings_dict[pid]['mu'].append(MU)
+                    ratings_dict[pid]['sigma'].append(SIGMA)
+                    ratings_dict[pid]['gameid'].append(None)
+            # Update ratings using skill_rating.update_ratings
+            # Note: update_ratings expects dict d, game id, winners list, losers list
+            # We'll pass the current game id as idx (or gid)
+            updated_dict, _ = self.skill_rating.update_ratings(ratings_dict, gid, winners, losers)
+            if updated_dict is not None:
+                ratings_dict = updated_dict
+
+        # After processing, extract mu and sigma lists for target puuid
+        target_data = ratings_dict.get(puuid)
+        if not target_data or len(target_data['mu']) <= 1:
+            await interaction.response.send_message(content="Not enough data to generate rating graph", ephemeral=True)
+            return
+        mu_list = target_data['mu']
+        sigma_list = target_data['sigma']
+        # Ensure directory exists
+        os.makedirs('data/ratings_imgs', exist_ok=True)
+        # Generate image using image_gen
+        self.image_gen.generate_rating_img(mu_list, sigma_list, puuid)
+        # Send image
+        file = File(f'data/ratings_imgs/{puuid}.png', filename="rating.png")
+        embed = Embed(title=f"Rating Progression for {gamename}#{tag}", color=Colour.blurple())
+        embed.set_image(url="attachment://rating.png")
+        await interaction.response.send_message(embed=embed, file=file)

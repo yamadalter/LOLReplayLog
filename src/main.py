@@ -19,6 +19,7 @@ if DISCORD_BOT_TOKEN == "":
 
 intents = Intents.default()
 intents.message_content = True
+intents.members = True
 client = Client(intents=intents)
 tree = CommandTree(client)
 
@@ -130,6 +131,15 @@ async def detail(interaction: Interaction, member: discord.Member = None):
 async def upload(interaction: Interaction):
     await interaction.response.defer(thinking=True)
     await bot_funcs.upload(interaction)
+
+
+@tree.command(name='rating', description='レートの推移をグラフで表示します')
+@app_commands.describe(
+    member='レートを表示するメンバーを選択します（未指定で自分）'
+)
+async def rating(interaction: Interaction, member: discord.Member = None):
+    await interaction.response.defer(thinking=True)
+    await bot_funcs.rating_graph(interaction, member)
 
 
 @tree.command(name='update', description='version upを行います')
