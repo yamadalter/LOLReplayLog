@@ -20,6 +20,7 @@ import numpy as np
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from db import DB
+from PIL import Image, ImageDraw
 
 
 class BotFunctions():
@@ -413,7 +414,7 @@ class BotFunctions():
         json.dump(self.dic, json_file, indent=2, ensure_ascii=False)
 
     async def rating_graph(self, interaction, member=None):
-        """Display skill rating progression for a linked summoner, split by lane."""
+        """Display skill rating progression for a linked summoner, combined lane graphs."""
         discord_id = str(interaction.user.id) if member is None else str(member.id)
         if discord_id not in self.dic:
             await interaction.followup.send(content="Summoner is not linked", ephemeral=True)
@@ -451,8 +452,8 @@ class BotFunctions():
 
         # Define lanes we want to display
         lanes = ['top', 'jg', 'mid', 'bot', 'sup']
-        files = []
-        embed = Embed(title=f"Rating Progression for {gamename}#{tag}", color=Colour.blurple())
+        lane_images = []  # list of (lane, PIL.Image)
+        lane_counts = {}  # lane -> number of games
 
         for lane in lanes:
             df_lane = df_user[df_user['lane'] == lane].copy()
@@ -464,21 +465,63 @@ class BotFunctions():
             df_lane = df_lane.sort_values(by='updated_at')
             mu_list = df_lane['mu_after'].tolist()
             sigma_list = df_lane['sigma_after'].tolist()
-            if len(mu_list) < 2:
+            if len(mu_list) == 0:
                 continue
-            # Generate image
+            # Generate image for this lane
             os.makedirs('data/ratings_imgs', exist_ok=True)
             img_path = f'data/ratings_imgs/{puuid}_{lane}.png'
-            # Use a unique name for the file: puuid_lane
             self.image_gen.generate_rating_img(mu_list, sigma_list, f"{puuid}_{lane}")
-            file = File(img_path, filename=f"rating_{lane}.png")
-            files.append(file)
-            embed.add_field(name=lane.upper(), value=f"{len(mu_list)} games", inline=True)
+            # Open the generated image
+            img = Image.open(img_path)
+            # Draw lane label on the image
+            draw = ImageDraw.Draw(img)
+            # Use a small font; fallback to default
+            label = lane.upper()
+            # Position at top-left with some padding
+            draw.text((10, 10), label, fill=(255, 255, 255))
+            lane_images.append((lane, img))
+            lane_counts[lane] = len(mu_list)
 
-        if not files:
+        if not lane_images:
             await interaction.followup.send(content="Not enough data to generate rating graphs for any lane.", ephemeral=True)
             return
 
-        # Set first image as main image in embed
-        embed.set_image(url=f"attachment://{files[0].filename}")
-        await interaction.followup.send(files=files, embed=embed)
+        # Combine images horizontally
+        # Ensure all images have same height (resize keeping aspect ratio)
+        target_height = max(img.height for _, img in lane_images)
+        resized_images = []
+        for lane, img in lane_images:
+            if img.height != target_height:
+                # Compute new width to preserve aspect ratio
+                w = int(img.width * target_height / img.height)
+                img = img.resize((w, target_height), Image.LANCZOS)
+            resized_images.append(img)
+
+        total_width = sum(img.width for img in resized_images)
+        combined = Image.new('RGBA', (total_width, target_height), (0, 0, 0, 0))
+        x_offset = 0
+        for img in resized_images:
+            combined.paste(img, (x_offset, 0))
+            x_offset += img.width
+
+        combined_path = f'data/ratings_imgs/{puuid}_combined.png'
+        combined.save(combined_path)
+
+        # Prepare file to send
+        file = File(combined_path, filename="rating_combined.png")
+        # Create embed with description of lanes
+        embed = Embed(title=f"Rating Progression for {gamename}#{tag}", color=Colour.blurple())
+        # Add fields for each lane with game counts
+        for lane in lanes:
+            if lane in lane_counts:
+                embed.add_field(name=lane.upper(), value=f"{lane_counts[lane]} games", inline=True)
+        embed.set_image(url="attachment://rating_combined.png")
+
+        await interaction.followup.send(embed=embed, file=file)
+
+        # Optional: delete temporary lane images to save space
+        for lane in lanes:
+            try:
+                os.remove(f'data/ratings_imgs/{puuid}_{lane}.png')
+            except FileNotFoundError:
+                pass
