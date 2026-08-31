@@ -414,7 +414,7 @@ class BotFunctions():
         json.dump(self.dic, json_file, indent=2, ensure_ascii=False)
 
     async def rating_graph(self, interaction, member=None):
-        """Display skill rating progression for a linked summoner, combined lane graphs."""
+        """Display skill rating progression for a linked summoner, combined lane graphs stacked vertically."""
         discord_id = str(interaction.user.id) if member is None else str(member.id)
         if discord_id not in self.dic:
             await interaction.followup.send(content="Summoner is not linked", ephemeral=True)
@@ -453,7 +453,7 @@ class BotFunctions():
         # Define lanes we want to display
         lanes = ['top', 'jg', 'mid', 'bot', 'sup']
         lane_images = []  # list of (lane, PIL.Image)
-        lane_counts = {}  # lane -> number of games
+        lane_info = {}    # lane -> dict with count, latest, delta
 
         for lane in lanes:
             df_lane = df_user[df_user['lane'] == lane].copy()
@@ -480,29 +480,38 @@ class BotFunctions():
             # Position at top-left with some padding
             draw.text((10, 10), label, fill=(255, 255, 255))
             lane_images.append((lane, img))
-            lane_counts[lane] = len(mu_list)
+            # Compute stats
+            count = len(mu_list)
+            latest = mu_list[-1]
+            earliest = mu_list[0]
+            delta = latest - earliest
+            lane_info[lane] = {
+                'count': count,
+                'latest': latest,
+                'delta': delta
+            }
 
         if not lane_images:
             await interaction.followup.send(content="Not enough data to generate rating graphs for any lane.", ephemeral=True)
             return
 
-        # Combine images horizontally
-        # Ensure all images have same height (resize keeping aspect ratio)
-        target_height = max(img.height for _, img in lane_images)
+        # Combine images vertically
+        # Ensure all images have same width (resize keeping aspect ratio)
+        target_width = max(img.width for _, img in lane_images)
         resized_images = []
         for lane, img in lane_images:
-            if img.height != target_height:
-                # Compute new width to preserve aspect ratio
-                w = int(img.width * target_height / img.height)
-                img = img.resize((w, target_height), Image.LANCZOS)
+            if img.width != target_width:
+                # Compute new height to preserve aspect ratio
+                h = int(img.height * target_width / img.width)
+                img = img.resize((target_width, h), Image.LANCZOS)
             resized_images.append(img)
 
-        total_width = sum(img.width for img in resized_images)
-        combined = Image.new('RGBA', (total_width, target_height), (0, 0, 0, 0))
-        x_offset = 0
+        total_height = sum(img.height for img in resized_images)
+        combined = Image.new('RGBA', (target_width, total_height), (0, 0, 0, 0))
+        y_offset = 0
         for img in resized_images:
-            combined.paste(img, (x_offset, 0))
-            x_offset += img.width
+            combined.paste(img, (0, y_offset))
+            y_offset += img.height
 
         combined_path = f'data/ratings_imgs/{puuid}_combined.png'
         combined.save(combined_path)
@@ -511,10 +520,12 @@ class BotFunctions():
         file = File(combined_path, filename="rating_combined.png")
         # Create embed with description of lanes
         embed = Embed(title=f"Rating Progression for {gamename}#{tag}", color=Colour.blurple())
-        # Add fields for each lane with game counts
+        # Add fields for each lane with game counts, latest rating and delta
         for lane in lanes:
-            if lane in lane_counts:
-                embed.add_field(name=lane.upper(), value=f"{lane_counts[lane]} games", inline=True)
+            if lane in lane_info:
+                info = lane_info[lane]
+                value = f"{info['count']} games\nLatest: {info['latest']:.1f} ({info['delta']:+.1f})"
+                embed.add_field(name=lane.upper(), value=value, inline=True)
         embed.set_image(url="attachment://rating_combined.png")
 
         await interaction.followup.send(embed=embed, file=file)
