@@ -433,23 +433,26 @@ class BotFunctions():
             await interaction.followup.send(content="Rating history not loaded yet", ephemeral=True)
             return
 
+        # Filter for this puuid
         df_user = self.df_rating[self.df_rating['puuid'] == puuid].copy()
         if df_user.empty:
             await interaction.followup.send(content="No rating history found for this summoner", ephemeral=True)
             return
 
-        sort_col = None
-        for col in ['game_id', 'timestamp', 'created_at']:
-            if col in df_user.columns:
-                sort_col = col
-                break
-        if sort_col is None:
-            df_user = df_user.reset_index()
-            sort_col = 'index'
-        df_user = df_user.sort_values(by=sort_col)
+        # Ensure required columns exist
+        required = {'mu_after', 'sigma_after', 'updated_at', 'gameId'}
+        missing = [c for c in required if c not in df_user.columns]
+        if missing:
+            await interaction.followup.send(content=f"Rating history missing columns: {missing}. Available: {list(df_user.columns)}", ephemeral=True)
+            return
 
-        mu_list = df_user['mu'].tolist()
-        sigma_list = df_user['sigma'].tolist()
+        # Keep one row per gameId (take the first if multiple lanes)
+        df_user = df_user.drop_duplicates(subset=['gameId'], keep='first')
+        # Sort by updated_at ascending (oldest first)
+        df_user = df_user.sort_values(by='updated_at')
+
+        mu_list = df_user['mu_after'].tolist()
+        sigma_list = df_user['sigma_after'].tolist()
 
         if len(mu_list) < 2:
             await interaction.followup.send(content=f"Not enough data to generate rating graph (only {len(mu_list)} points)", ephemeral=True)
