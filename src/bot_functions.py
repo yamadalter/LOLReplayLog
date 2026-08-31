@@ -413,7 +413,7 @@ class BotFunctions():
         json.dump(self.dic, json_file, indent=2, ensure_ascii=False)
 
     async def rating_graph(self, interaction, member=None):
-        """Display skill rating progression for a linked summoner using pre-loaded rating_history."""
+        """Display skill rating progression for a linked summoner, split by lane."""
         discord_id = str(interaction.user.id) if member is None else str(member.id)
         if discord_id not in self.dic:
             await interaction.followup.send(content="Summoner is not linked", ephemeral=True)
@@ -440,27 +440,45 @@ class BotFunctions():
             return
 
         # Ensure required columns exist
-        required = {'mu_after', 'sigma_after', 'updated_at', 'gameId'}
+        required = {'mu_after', 'sigma_after', 'updated_at', 'gameId', 'lane'}
         missing = [c for c in required if c not in df_user.columns]
         if missing:
             await interaction.followup.send(content=f"Rating history missing columns: {missing}. Available: {list(df_user.columns)}", ephemeral=True)
             return
 
-        # Keep one row per gameId (take the first if multiple lanes)
-        df_user = df_user.drop_duplicates(subset=['gameId'], keep='first')
-        # Sort by updated_at ascending (oldest first)
-        df_user = df_user.sort_values(by='updated_at')
+        # Normalize lane strings (lowercase)
+        df_user['lane'] = df_user['lane'].astype(str).str.lower()
 
-        mu_list = df_user['mu_after'].tolist()
-        sigma_list = df_user['sigma_after'].tolist()
+        # Define lanes we want to display
+        lanes = ['top', 'jg', 'mid', 'bot', 'sup']
+        files = []
+        embed = Embed(title=f"Rating Progression for {gamename}#{tag}", color=Colour.blurple())
 
-        if len(mu_list) < 2:
-            await interaction.followup.send(content=f"Not enough data to generate rating graph (only {len(mu_list)} points)", ephemeral=True)
+        for lane in lanes:
+            df_lane = df_user[df_user['lane'] == lane].copy()
+            if df_lane.empty:
+                continue
+            # Keep one row per gameId (if multiple entries per game, take first)
+            df_lane = df_lane.drop_duplicates(subset=['gameId'], keep='first')
+            # Sort by updated_at ascending (oldest first)
+            df_lane = df_lane.sort_values(by='updated_at')
+            mu_list = df_lane['mu_after'].tolist()
+            sigma_list = df_lane['sigma_after'].tolist()
+            if len(mu_list) < 2:
+                continue
+            # Generate image
+            os.makedirs('data/ratings_imgs', exist_ok=True)
+            img_path = f'data/ratings_imgs/{puuid}_{lane}.png'
+            # Use a unique name for the file: puuid_lane
+            self.image_gen.generate_rating_img(mu_list, sigma_list, f"{puuid}_{lane}")
+            file = File(img_path, filename=f"rating_{lane}.png")
+            files.append(file)
+            embed.add_field(name=lane.upper(), value=f"{len(mu_list)} games", inline=True)
+
+        if not files:
+            await interaction.followup.send(content="Not enough data to generate rating graphs for any lane.", ephemeral=True)
             return
 
-        os.makedirs('data/ratings_imgs', exist_ok=True)
-        self.image_gen.generate_rating_img(mu_list, sigma_list, puuid)
-        file = File(f'data/ratings_imgs/{puuid}.png', filename="rating.png")
-        embed = Embed(title=f"Rating Progression for {gamename}#{tag}", color=Colour.blurple())
-        embed.set_image(url="attachment://rating.png")
-        await interaction.followup.send(embed=embed, file=file)
+        # Set first image as main image in embed
+        embed.set_image(url=f"attachment://{files[0].filename}")
+        await interaction.followup.send(files=files, embed=embed)
