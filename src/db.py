@@ -19,6 +19,13 @@ class DB:
                 df_bans = pd.read_sql_table('bans', conn)
                 df_stats = pd.read_sql_table('stats', conn)
                 df_participants = pd.read_sql_table('participants', conn)
+                df_rating = pd.read_sql_table('rating_history', conn)
 
-        return df_game, df_player, df_team, df_bans, df_stats, df_participants
+        return df_game, df_player, df_team, df_bans, df_stats, df_participants, df_rating
+
+    def get_rating_history(self):
+        """Return DataFrame with columns: puuid, mu, sigma, game_id (or timestamp)."""
+        with self.engine.connect() as conn:
+            df = pd.read_sql_table('rating_history', conn)
+        return df
 

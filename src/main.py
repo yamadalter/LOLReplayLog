@@ -38,7 +38,7 @@ id_list = []
 async def db_sync():
     global id_list
     # データベースから最新のデータを取得
-    bot_funcs.df_game, bot_funcs.df_player, bot_funcs.df_team, bot_funcs.df_bans, bot_funcs.df_stats, bot_funcs.df_participants = db.get_tables()
+    bot_funcs.df_game, bot_funcs.df_player, bot_funcs.df_team, bot_funcs.df_bans, bot_funcs.df_stats, bot_funcs.df_participants, bot_funcs.df_rating = db.get_tables()
 
     current_id_list = bot_funcs.df_game['id'].tolist()
     
@@ -68,7 +68,7 @@ async def on_ready():
 
     print("DB check start")
 
-    bot_funcs.df_game, bot_funcs.df_player, bot_funcs.df_team, bot_funcs.df_bans, bot_funcs.df_stats, bot_funcs.df_participants = db.get_tables()
+    bot_funcs.df_game, bot_funcs.df_player, bot_funcs.df_team, bot_funcs.df_bans, bot_funcs.df_stats, bot_funcs.df_participants, bot_funcs.df_rating = db.get_tables()
     id_list = bot_funcs.df_game['id'].tolist()
 
     # スラッシュコマンドを同期
